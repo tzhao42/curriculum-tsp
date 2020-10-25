@@ -1,4 +1,4 @@
-# pytorch-drl4vrp
+# 6883-vrp
 
 Implementation of: Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018).
 
@@ -6,8 +6,14 @@ Currently, Traveling Salesman Problems and Vehicle Routing Problems are supporte
 
 ## Requirements:
 
+Forked from a repo recommending:
 * Python 3.6
 * pytorch=0.4.1
+* matplotlib
+
+Currently running with:
+* Python 3.7.8
+* pytorch=1.6.0+cu101
 * matplotlib
 
 # To Run
