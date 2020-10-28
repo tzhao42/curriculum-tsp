@@ -159,7 +159,7 @@ class Logger:
             f.write(message)
 
 
-def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None):
+def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None, debug=False):
     """Used to monitor progress on a validation set & optionally plot solution."""
 
     actor.eval()
@@ -183,6 +183,9 @@ def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=N
             name = 'batch%d_%2.4f.png'%(batch_idx, reward)
             path = os.path.join(logger.validate_dir, name)
             render_fn(static, tour_indices, path)
+        
+        if debug:
+            break
 
     actor.train()
     return np.mean(rewards)
@@ -261,6 +264,9 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn, ren
                       (batch_idx, len(train_loader), mean_reward, mean_loss,
                        times[-1]))
 
+            if kwargs["debug"]:
+                break
+
         mean_loss = np.mean(losses)
         mean_reward = np.mean(rewards)
 
@@ -276,7 +282,7 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn, ren
         torch.save(critic.state_dict(), save_path)
 
         # Save rendering of validation set tours
-        mean_valid = validate(valid_loader, actor, reward_fn, render_fn, num_plot=5, logger=logger)
+        mean_valid = validate(valid_loader, actor, reward_fn, render_fn, num_plot=5, logger=logger, debug=args.debug)
 
         # Save best model parameters
         if mean_valid < best_reward:
@@ -294,6 +300,9 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn, ren
               (mean_loss, mean_reward, mean_valid, time.time() - epoch_start,
               np.mean(times)))
 
+        if kwargs["debug"]:
+            break
+
 
 
 def train_tsp(args):
@@ -303,16 +312,22 @@ def train_tsp(args):
     # TSP50, 6.08
     # TSP100, 8.44
 
+    # checking if debug
+    if args.debug:
+        args.train_size = 10
+        args.valid_size = 10
+
+    # initializing logger
     logger = Logger(args.task, args.num_nodes, args.run_name)
 
-
-    STATIC_SIZE = 2 # (x, y)
-    DYNAMIC_SIZE = 1 # dummy for compatibility
-
+    # creating datasets
     train_data = TSPDataset(args.num_nodes, args.train_size, args.seed, args.proportions)
     # train_data = TSPDataset(args.num_nodes, args.train_size, args.seed, proportions=[0,1.0,0])
     valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1, args.proportions)
     # valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1, proportions=[0,1.0,0])
+
+    STATIC_SIZE = 2 # (x, y)
+    DYNAMIC_SIZE = 1 # dummy for compatibility
 
     update_fn = None
 
@@ -348,8 +363,8 @@ def train_tsp(args):
     for test_id in range(0, 3):
         test_data = TSPDataset(args.num_nodes, args.train_size, args.seed + 2, proportions=test_proportions[test_id])
         test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
-        out = validate(test_loader, actor, tsp.reward, tsp.render, num_plot=5, logger=logger)
-        logger.log(f"Average tour length for {test_names[test_id]}: {out}")
+        out = validate(test_loader, actor, tsp.reward, tsp.render, num_plot=5, logger=logger, debug=args.debug)
+        logger.log(f"Average tour length for {test_names[test_id]}: {out}\n")
 
 
 def train_vrp(args):
@@ -423,6 +438,7 @@ def train_vrp(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Combinatorial Optimization')
+    # their arguments
     parser.add_argument('--seed', default=12345, type=int)
     parser.add_argument('--checkpoint', default=None)
     parser.add_argument('--test', action='store_true', default=False)
@@ -438,7 +454,12 @@ if __name__ == '__main__':
     parser.add_argument('--train-size',default=1000000, type=int)
     parser.add_argument('--valid-size', default=1000, type=int)
 
+    # our arguments
     parser.add_argument('--run-name', default='tsp', type=str)
+    parser.add_argument('--proportions', nargs = 3, default=None, type=float)
+
+    # debug flag: short circuits training cycle
+    parser.add_argument('--debug', dest="debug", default=False, action="store_true")
 
     args = parser.parse_args()
 

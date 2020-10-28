@@ -35,7 +35,7 @@ class TSPDataset(Dataset):
                 rand_val = np.random.uniform(0,1)
                 if rand_val <= proportions[0]:
                     # uniform, do nothing
-
+                    pass
                 elif rand_val-proportions[0] <= proportions[1]:
                     # medium corners
                     top = (np.random.randint(0,2) == 0)
