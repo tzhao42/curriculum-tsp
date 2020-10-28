@@ -19,9 +19,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from model import DRL4TSP, Encoder
+from tasks import tsp, vrp
+from tasks.tsp import TSPDataset
+from tasks.vrp import VehicleRoutingDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#device = torch.device('cpu')
 
 
 class StateCritic(nn.Module):
@@ -85,6 +87,38 @@ class Critic(nn.Module):
         output = F.relu(self.fc2(output)).squeeze(2)
         output = self.fc3(output).sum(dim=2)
         return output
+
+
+class Logger:
+    """
+    Logging object for training runs.
+    """
+
+    def __init__(self, task, nodes, name):
+        """
+        Initializes a logger object.
+        Args:
+            task: string, "tsp" or "vrp"
+            nodes: int, one of: [10, 20, 50, 100]
+            name: string, describes current run (model details and custom name)
+        """
+        assert task in {"tsp", "vrp"}
+        assert nodes in {10,20,50,100}
+        assert isinstance(name, str)
+
+        self._task = task
+        self._nodes = nodes
+        self._name = name 
+        
+        # unpacking current datetime
+        curr_datetime = datetime.datetime.now()
+        self._time = f"{curr_datetime.year}{curr_datetime.month}{curr_datetime.day}_{curr_datetime.hour}{curr_datetime.minute}{curr_datetime.second}"
+
+
+
+
+
+
 
 
 def validate(data_loader, actor, reward_fn, render_fn=None, save_dir='.',
@@ -244,8 +278,6 @@ def train_tsp(args):
     # TSP50, 6.08
     # TSP100, 8.44
 
-    from tasks import tsp
-    from tasks.tsp import TSPDataset
 
     STATIC_SIZE = 2 # (x, y)
     DYNAMIC_SIZE = 1 # dummy for compatibility
@@ -298,8 +330,6 @@ def train_vrp(args):
     # VRP50, Capacity 40:  11.39 (Greedy)
     # VRP100, Capacity 50: 17.23  (Greedy)
 
-    from tasks import vrp
-    from tasks.vrp import VehicleRoutingDataset
 
     # Determines the maximum amount of load for a vehicle based on num nodes
     LOAD_DICT = {10: 20, 20: 30, 50: 40, 100: 50}
