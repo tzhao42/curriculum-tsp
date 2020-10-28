@@ -20,7 +20,8 @@ import matplotlib.pyplot as plt
 
 class TSPDataset(Dataset):
 
-    def __init__(self, size=50, num_samples=1e6, seed=None):
+    def __init__(self, size=50, num_samples=1e6, seed=None, proportions=[1.0,0.0,0.0]):
+        # unit square, medium corners (0.2), small corners (0.01)
         super(TSPDataset, self).__init__()
 
         if seed is None:
@@ -29,6 +30,28 @@ class TSPDataset(Dataset):
         np.random.seed(seed)
         torch.manual_seed(seed)
         self.dataset = torch.rand((num_samples, 2, size))
+        for i in range(0, num_samples):
+            for k in range(0, size):
+                rand_val = np.random.uniform(0,1)
+                if rand_val <= proportions[0]:
+                    # uniform, do nothing
+
+                elif rand_val-proportions[0] <= proportions[1]:
+                    # medium corners
+                    top = (np.random.randint(0,2) == 0)
+                    for j in range(0, 2):
+                        if top:
+                            self.dataset[i][j][k] = np.random.uniform(0,0.2)
+                        else:
+                            self.dataset[i][j][k] = np.random.uniform(0.8,1)
+                else:
+                    # small corners
+                    top = (np.random.randint(0,2) == 0)
+                    for j in range(0, 2):
+                        if top:
+                            self.dataset[i][j][k] = np.random.uniform(0,0.01)
+                        else:
+                            self.dataset[i][j][k] = np.random.uniform(1-0.01,1)
         self.dynamic = torch.zeros(num_samples, 1, size)
         self.num_nodes = size
         self.size = num_samples

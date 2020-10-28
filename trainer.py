@@ -309,8 +309,10 @@ def train_tsp(args):
     STATIC_SIZE = 2 # (x, y)
     DYNAMIC_SIZE = 1 # dummy for compatibility
 
-    train_data = TSPDataset(args.num_nodes, args.train_size, args.seed)
-    valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1)
+    train_data = TSPDataset(args.num_nodes, args.train_size, args.seed, args.proportions)
+    # train_data = TSPDataset(args.num_nodes, args.train_size, args.seed, proportions=[0,1.0,0])
+    valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1, args.proportions)
+    # valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1, proportions=[0,1.0,0])
 
     update_fn = None
 
@@ -336,18 +338,18 @@ def train_tsp(args):
 
         path = os.path.join(args.checkpoint, 'critic.pt')
         critic.load_state_dict(torch.load(path, device))
-
+    
     if not args.test:
         train(actor, critic, logger=logger, **kwargs)
-
-    test_data = TSPDataset(args.num_nodes, args.train_size, args.seed + 2)
-
-    test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
-
-
-    out = validate(test_loader, actor, tsp.reward, tsp.render, num_plot=5, logger=logger)
-
-    logger.log(f"Average tour length: {out}")
+    
+    test_proportions = [[1,0,0], [0,1,0], [0,0,1]]
+    test_names = ["uniform", "shifted", "adversary"]
+    
+    for test_id in range(0, 3):
+        test_data = TSPDataset(args.num_nodes, args.train_size, args.seed + 2, proportions=test_proportions[test_id])
+        test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
+        out = validate(test_loader, actor, tsp.reward, tsp.render, num_plot=5, logger=logger)
+        logger.log(f"Average tour length for {test_names[test_id]}: {out}")
 
 
 def train_vrp(args):
