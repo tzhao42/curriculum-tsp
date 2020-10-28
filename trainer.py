@@ -9,6 +9,7 @@ Each task must define the following functions:
 
 import os
 import time
+import pathlib
 import argparse
 import datetime
 import numpy as np
@@ -18,6 +19,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
+from constants import BASE_DIR, LOG_DIR
 from model import DRL4TSP, Encoder
 from tasks import tsp, vrp
 from tasks.tsp import TSPDataset
@@ -94,41 +96,73 @@ class Logger:
     Logging object for training runs.
     """
 
-    def __init__(self, task, nodes, name):
+    def __init__(self, task, nodes, run_name):
         """
         Initializes a logger object.
         Args:
             task: string, "tsp" or "vrp"
             nodes: int, one of: [10, 20, 50, 100]
-            name: string, describes current run (model details and custom name)
+            run_name: string, describes current run
         """
         assert task in {"tsp", "vrp"}
         assert nodes in {10,20,50,100}
-        assert isinstance(name, str)
+        assert isinstance(run_name, str)
 
+        # initializing instance attributes
         self._task = task
         self._nodes = nodes
-        self._name = name 
+        self._run_name = run_name 
         
         # unpacking current datetime
         curr_datetime = datetime.datetime.now()
-        self._time = f"{curr_datetime.year}{curr_datetime.month}{curr_datetime.day}_{curr_datetime.hour}{curr_datetime.minute}{curr_datetime.second}"
+        curr_year = curr_datetime.year
+        curr_month = "{:02}".format(curr_datetime.month)
+        curr_day = "{:02}".format(curr_datetime.day)
+        curr_hour = "{:02}".format(curr_datetime.hour)
+        curr_minute = "{:02}".format(curr_datetime.minute)
+        curr_second = "{:02}".format(curr_datetime.second)
+        self._time = f"{curr_year}{curr_month}{curr_day}T{curr_hour}{curr_minute}{curr_second}"
+
+        # superdirectory name
+        self._superdir_name = f"{task}-{nodes}"
+
+        # namestring
+        self._name = f"{self._task}-{self._nodes}-{self._run_name}-{self._time}"
+
+        # creating superdirectory
+        self._superdir = os.path.join(LOG_DIR, self._superdir_name)
+        if not os.path.exists(self._superdir):
+            os.makedirs(self._superdir)
+
+        # creating directory
+        self.dir = os.path.join(self._superdir, self._name)
+        if not os.path.exists(self.dir):
+            os.makedirs(self.dir)
+
+        # creating log file
+        self._logfile = os.path.join(self.dir, "log.log")
+        with open(self._logfile, "a+") as f:
+            f.write(f"Current device: {device}\n")
+
+        # creating validate and checkpoint subdirs
+        self.validate_dir= os.path.join(self.dir, "validate")
+        if not os.path.exists(self.validate_dir):
+            os.makedirs(self.validate_dir)
+
+        self.checkpoint_dir= os.path.join(self.dir, "checkpoints")
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir)
+
+    def log(self, message):
+        """Writes a line to the log file."""
+        with open(self._logfile, "a+") as f:
+            f.write(message)
 
 
-
-
-
-
-
-
-def validate(data_loader, actor, reward_fn, render_fn=None, save_dir='.',
-             num_plot=5):
+def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None):
     """Used to monitor progress on a validation set & optionally plot solution."""
 
     actor.eval()
-
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
 
     rewards = []
     for batch_idx, batch in enumerate(data_loader):
@@ -147,25 +181,18 @@ def validate(data_loader, actor, reward_fn, render_fn=None, save_dir='.',
 
         if render_fn is not None and batch_idx < num_plot:
             name = 'batch%d_%2.4f.png'%(batch_idx, reward)
-            path = os.path.join(save_dir, name)
+            path = os.path.join(logger.validate_dir, name)
             render_fn(static, tour_indices, path)
 
     actor.train()
     return np.mean(rewards)
 
 
-def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
-          render_fn, batch_size, actor_lr, critic_lr, max_grad_norm,
-          **kwargs):
+def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn, render_fn, batch_size, actor_lr, critic_lr, max_grad_norm, logger=None, **kwargs):
     """Constructs the main actor & critic networks, and performs all training."""
 
-    now = '%s' % datetime.datetime.now().time()
-    now = now.replace(':', '_')
-    save_dir = os.path.join(task, '%d' % num_nodes, now)
-
-    checkpoint_dir = os.path.join(save_dir, 'checkpoints')
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+    save_dir = logger.dir
+    checkpoint_dir = logger.checkpoint_dir
 
     actor_optim = optim.Adam(actor.parameters(), lr=actor_lr)
     critic_optim = optim.Adam(critic.parameters(), lr=critic_lr)
@@ -221,7 +248,8 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
             rewards.append(torch.mean(reward.detach()).item())
             losses.append(torch.mean(actor_loss.detach()).item())
 
-            if (batch_idx + 1) % 100 == 0:
+            # if (batch_idx + 1) % 100 == 0:
+            if batch_idx % 100 == 0:
                 end = time.time()
                 times.append(end - start)
                 start = end
@@ -229,7 +257,7 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
                 mean_loss = np.mean(losses[-100:])
                 mean_reward = np.mean(rewards[-100:])
 
-                print('  Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs' %
+                logger.log('Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n' %
                       (batch_idx, len(train_loader), mean_reward, mean_loss,
                        times[-1]))
 
@@ -237,7 +265,7 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
         mean_reward = np.mean(rewards)
 
         # Save the weights
-        epoch_dir = os.path.join(checkpoint_dir, '%s' % epoch)
+        epoch_dir = os.path.join(checkpoint_dir, f"{epoch}")
         if not os.path.exists(epoch_dir):
             os.makedirs(epoch_dir)
 
@@ -248,10 +276,7 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
         torch.save(critic.state_dict(), save_path)
 
         # Save rendering of validation set tours
-        valid_dir = os.path.join(save_dir, '%s' % epoch)
-
-        mean_valid = validate(valid_loader, actor, reward_fn, render_fn,
-                              valid_dir, num_plot=5)
+        mean_valid = validate(valid_loader, actor, reward_fn, render_fn, num_plot=5, logger=logger)
 
         # Save best model parameters
         if mean_valid < best_reward:
@@ -264,7 +289,7 @@ def train(actor, critic, task, num_nodes, train_data, valid_data, reward_fn,
             save_path = os.path.join(save_dir, 'critic.pt')
             torch.save(critic.state_dict(), save_path)
 
-        print('Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs '\
+        logger.log('Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs '\
               '(%2.4fs / 100 batches)\n' % \
               (mean_loss, mean_reward, mean_valid, time.time() - epoch_start,
               np.mean(times)))
@@ -277,6 +302,8 @@ def train_tsp(args):
     # TSP20, 3.97
     # TSP50, 6.08
     # TSP100, 8.44
+
+    logger = Logger(args.task, args.num_nodes, args.run_name)
 
 
     STATIC_SIZE = 2 # (x, y)
@@ -311,15 +338,16 @@ def train_tsp(args):
         critic.load_state_dict(torch.load(path, device))
 
     if not args.test:
-        train(actor, critic, **kwargs)
+        train(actor, critic, logger=logger, **kwargs)
 
     test_data = TSPDataset(args.num_nodes, args.train_size, args.seed + 2)
 
-    test_dir = 'test'
     test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
-    out = validate(test_loader, actor, tsp.reward, tsp.render, test_dir, num_plot=5)
 
-    print('Average tour length: ', out)
+
+    out = validate(test_loader, actor, tsp.reward, tsp.render, num_plot=5, logger=logger)
+
+    logger.log(f"Average tour length: {out}")
 
 
 def train_vrp(args):
@@ -407,6 +435,8 @@ if __name__ == '__main__':
     parser.add_argument('--layers', dest='num_layers', default=1, type=int)
     parser.add_argument('--train-size',default=1000000, type=int)
     parser.add_argument('--valid-size', default=1000, type=int)
+
+    parser.add_argument('--run-name', default='tsp', type=str)
 
     args = parser.parse_args()
 
