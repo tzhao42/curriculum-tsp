@@ -48,10 +48,20 @@ class TSPDataset(Dataset):
                     # small corners
                     top = (np.random.randint(0,2) == 0)
                     for j in range(0, 2):
-                        if top:
-                            self.dataset[i][j][k] = np.random.uniform(0,0.01)
+                        if j == 0:
+                            # x cordinate
+                            if top:
+                                self.dataset[i][j][k] = np.random.uniform(1-0.01,1)
+                            else:
+                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
                         else:
-                            self.dataset[i][j][k] = np.random.uniform(1-0.01,1)
+                            # y coordinate
+                            if top:
+                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
+                            else:
+                                self.dataset[i][j][k] = np.random.uniform(1-0.01,1)
+
+                        
         self.dynamic = torch.zeros(num_samples, 1, size)
         self.num_nodes = size
         self.size = num_samples
