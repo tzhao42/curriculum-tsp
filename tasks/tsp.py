@@ -31,8 +31,8 @@ class TSPDataset(Dataset):
         torch.manual_seed(seed)
         self.dataset = torch.rand((num_samples, 2, size))
         for i in range(0, num_samples):
+            rand_val = np.random.uniform(0,1)
             for k in range(0, size):
-                rand_val = np.random.uniform(0,1)
                 if rand_val <= proportions[0]:
                     # uniform, do nothing
                     pass
