@@ -1,5 +1,7 @@
 #!/bin/bash
 
-python3 trainer.py --debug --task tsp --train-size 31 --valid-size 17 --run-name debug --device_id 0 --proportions 1 0 0
+SINGULARITY_CONTAINER="/om2/user/tzhao/singularity/ortools-pytorch-gpu.simg"
 
-python3 trainer.py --debug --task tsp --train-size 31 --valid-size 17 --run-name debug --device_id 1 --proportions 1 0 0
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 trainer.py --debug --device_id 0 --run-name debug0 --train-size 31 --valid-size 19 --proportions 1.00 0.00 0.00 &
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 trainer.py --debug --device_id 1 --run-name debug1 --train-size 31 --valid-size 19 --proportions 0.85 0.00 0.15 &
+

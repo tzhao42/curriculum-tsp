@@ -185,7 +185,7 @@ def test(
         # compute optimality gap
         model_tour_lengths = reward_fn(static, tour_indices)
         optimal_tour_lengths = get_batched_or_tsp(static)  # not actually exact solution
-        curr_opt_gaps = model_tour_lengths / optimal_tour_lengths
+        curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
         mean_opt_gap = curr_opt_gaps.mean().item()
         optimality_gaps.append(mean_opt_gap)
 
@@ -443,7 +443,7 @@ def train_tsp(args):
     for test_id in range(0, 3):
         test_data = TSPDataset(
             args.num_nodes,
-            args.valid_size / 50,  # cannot do too many because too slow
+            20,  # args.valid_size # cannot do too many because too slow
             args.seed + 2,
             proportions=test_proportions[test_id],
         )
