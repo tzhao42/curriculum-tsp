@@ -21,9 +21,11 @@ from torch.utils.data import DataLoader
 
 from constants import BASE_DIR, LOG_DIR
 from model import DRL4TSP, Encoder
-from tasks import tsp, vrp
+from tasks import tsp, vrp, tsp_or_tools
 from tasks.tsp import TSPDataset
 from tasks.vrp import VehicleRoutingDataset
+
+from tasks.tsp_or_tools import get_batched_or_tsp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -159,6 +161,44 @@ class Logger:
         """Writes a line to the log file."""
         with open(self._logfile, "a+") as f:
             f.write(message)
+
+
+def test(
+    data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None, debug=False
+):
+    """Compare performance of model and google OR tools"""
+
+    actor.eval()
+
+    optimality_gaps = []
+    for batch_idx, batch in enumerate(data_loader):
+
+        static, dynamic, x0 = batch
+
+        static = static.to(device)
+        dynamic = dynamic.to(device)
+        x0 = x0.to(device) if len(x0) > 0 else None
+
+        with torch.no_grad():
+            tour_indices, _ = actor.forward(static, dynamic, x0)
+
+        # compute optimality gap
+        model_tour_lengths = reward_fn(static, tour_indices)
+        optimal_tour_lengths = get_batched_or_tsp(static)  # not actually exact solution
+        curr_opt_gaps = model_tour_lengths / optimal_tour_lengths
+        mean_opt_gap = curr_opt_gaps.mean().item()
+        optimality_gaps.append(mean_opt_gap)
+
+        if render_fn is not None and batch_idx < num_plot:
+            name = "batch%d_%2.4f.png" % (batch_idx, mean_opt_gap)
+            path = os.path.join(logger.validate_dir, name)
+            render_fn(static, tour_indices, path)
+
+        if debug:
+            break
+
+    actor.train()
+    return np.mean(optimality_gaps)
 
 
 def validate(
@@ -403,12 +443,12 @@ def train_tsp(args):
     for test_id in range(0, 3):
         test_data = TSPDataset(
             args.num_nodes,
-            args.train_size,
+            args.valid_size / 50,  # cannot do too many because too slow
             args.seed + 2,
             proportions=test_proportions[test_id],
         )
         test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
-        out = validate(
+        out = test(
             test_loader,
             actor,
             tsp.reward,
@@ -417,7 +457,7 @@ def train_tsp(args):
             logger=logger,
             debug=args.debug,
         )
-        logger.log(f"Average tour length for {test_names[test_id]}: {out}\n")
+        logger.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
 
 
 def train_vrp(args):
@@ -506,9 +546,11 @@ if __name__ == "__main__":
     # our arguments
     parser.add_argument("--run-name", default="tsp", type=str)
     parser.add_argument("--proportions", nargs=3, default=None, type=float)
+    parser.add_argument("--device_id", default=0, type=int)
 
     # debug flag: short circuits training cycle
-    parser.add_argument("--debug", dest="debug", default=False, action="store_true")
+    parser.add_argument(
+        "--debug", dest="debug", default=False, action="store_true")
 
     args = parser.parse_args()
 
@@ -516,9 +558,10 @@ if __name__ == "__main__":
     # args.checkpoint = os.path.join('vrp', '10', '12_59_47.350165' + os.path.sep)
     # print(args.checkpoint)
 
-    if args.task == "tsp":
-        train_tsp(args)
-    elif args.task == "vrp":
-        train_vrp(args)
-    else:
-        raise ValueError("Task <%s> not understood" % args.task)
+    with torch.cuda.device(args.device_id):
+        if args.task == "tsp":
+            train_tsp(args)
+        elif args.task == "vrp":
+            train_vrp(args)
+        else:
+            raise ValueError("Task <%s> not understood" % args.task)
