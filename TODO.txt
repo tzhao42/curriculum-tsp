@@ -1,0 +1,13 @@
+Development:
+1) Restructure files
+2) Restructure directories
+3) Test to make sure restructure works
+
+Openmind:
+1) Run retraining job
+2) Run adversarial training job
+
+Research:
+1) Decide on a parameterization of distribution
+2) Implement adversarial training approach
+
