@@ -185,7 +185,7 @@ def test(
         # compute optimality gap
         model_tour_lengths = reward_fn(static, tour_indices)
         optimal_tour_lengths = get_batched_or_tsp(static)  # not actually exact solution
-        curr_opt_gaps = model_tour_lengths / optimal_tour_lengths
+        curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
         mean_opt_gap = curr_opt_gaps.mean().item()
         optimality_gaps.append(mean_opt_gap)
 
@@ -320,8 +320,8 @@ def train(
                 mean_reward = np.mean(rewards[-100:])
 
                 logger.log(
-                    "Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
-                    % (batch_idx, len(train_loader), mean_reward, mean_loss, times[-1])
+                    "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
+                    % (epoch, batch_idx, len(train_loader), mean_reward, mean_loss, times[-1])
                 )
 
             if kwargs["debug"]:
@@ -364,9 +364,10 @@ def train(
             torch.save(critic.state_dict(), save_path)
 
         logger.log(
-            "Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
+            "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
             "(%2.4fs / 100 batches)\n"
             % (
+                epoch,
                 mean_loss,
                 mean_reward,
                 mean_valid,
@@ -443,7 +444,7 @@ def train_tsp(args):
     for test_id in range(0, 3):
         test_data = TSPDataset(
             args.num_nodes,
-            args.valid_size / 50,  # cannot do too many because too slow
+            20,  # args.valid_size # cannot do too many because too slow
             args.seed + 2,
             proportions=test_proportions[test_id],
         )

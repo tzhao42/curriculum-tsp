@@ -85,7 +85,7 @@ def get_or_tsp(locs):
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
     search_parameters.time_limit.seconds = 10
-    search_parameters.log_search = True
+    search_parameters.log_search = False
     solution = routing.SolveWithParameters(search_parameters)
 
     # Setting first solution heuristic.
