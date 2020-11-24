@@ -19,148 +19,157 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from constants import BASE_DIR, LOG_DIR
-from model import DRL4TSP, Encoder
-from tasks import tsp, vrp, tsp_or_tools
-from tasks.tsp import TSPDataset
-from tasks.vrp import VehicleRoutingDataset
+from constants import BASE_DIR, LOG_DIR, DEVICE
+from models import DRL4TSP, Encoder, StateCritic
 
-from tasks.tsp_or_tools import get_batched_or_tsp
+from datasets import tsp, vrp
+from datasets.tsp import TSPDataset
+from datasets.vrp import VehicleRoutingDataset
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-class StateCritic(nn.Module):
-    """Estimates the problem complexity.
-
-    This is a basic module that just looks at the log-probabilities predicted by
-    the encoder + decoder, and returns an estimate of complexity
-    """
-
-    def __init__(self, static_size, dynamic_size, hidden_size):
-        super(StateCritic, self).__init__()
-
-        self.static_encoder = Encoder(static_size, hidden_size)
-        self.dynamic_encoder = Encoder(dynamic_size, hidden_size)
-
-        # Define the encoder & decoder models
-        self.fc1 = nn.Conv1d(hidden_size * 2, 20, kernel_size=1)
-        self.fc2 = nn.Conv1d(20, 20, kernel_size=1)
-        self.fc3 = nn.Conv1d(20, 1, kernel_size=1)
-
-        for p in self.parameters():
-            if len(p.shape) > 1:
-                nn.init.xavier_uniform_(p)
-
-    def forward(self, static, dynamic):
-
-        # Use the probabilities of visiting each
-        static_hidden = self.static_encoder(static)
-        dynamic_hidden = self.dynamic_encoder(dynamic)
-
-        hidden = torch.cat((static_hidden, dynamic_hidden), 1)
-
-        output = F.relu(self.fc1(hidden))
-        output = F.relu(self.fc2(output))
-        output = self.fc3(output).sum(dim=2)
-        return output
+from utils import tsp_or_tools
+from utils.tsp_or_tools import get_batched_or_tsp
 
 
-class Critic(nn.Module):
-    """Estimates the problem complexity.
+def parse_arguments():
+    """Parse arguments."""
+    parser = argparse.ArgumentParser(description="Combinatorial Optimization")
 
-    This is a basic module that just looks at the log-probabilities predicted by
-    the encoder + decoder, and returns an estimate of complexity
-    """
+    # their arguments
 
-    def __init__(self, hidden_size):
-        super(Critic, self).__init__()
+    # set random seed
+    parser.add_argument("--seed", default=12345, type=int)
 
-        # Define the encoder & decoder models
-        self.fc1 = nn.Conv1d(1, hidden_size, kernel_size=1)
-        self.fc2 = nn.Conv1d(hidden_size, 20, kernel_size=1)
-        self.fc3 = nn.Conv1d(20, 1, kernel_size=1)
+    # current_run
+    parser.add_argument("--task", default="tsp")
+    parser.add_argument("--test", action="store_true", default=False)
 
-        for p in self.parameters():
-            if len(p.shape) > 1:
-                nn.init.xavier_uniform_(p)
+    # current task
+    parser.add_argument("--train-size", default=1000000, type=int)
+    parser.add_argument("--valid-size", default=1000, type=int)
+    parser.add_argument("--nodes", dest="num_nodes", default=20, type=int)
 
-    def forward(self, input):
+    # model and training params
+    parser.add_argument("--actor_lr", default=5e-4, type=float)
+    parser.add_argument("--critic_lr", default=5e-4, type=float)
+    parser.add_argument("--max_grad_norm", default=2.0, type=float)
+    parser.add_argument("--batch_size", default=256, type=int)
+    parser.add_argument("--hidden", dest="hidden_size", default=128, type=int)
+    parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--layers", dest="num_layers", default=1, type=int)
 
-        output = F.relu(self.fc1(input.unsqueeze(1)))
-        output = F.relu(self.fc2(output)).squeeze(2)
-        output = self.fc3(output).sum(dim=2)
-        return output
+    # parser.add_argument("--checkpoint", default=None)
+
+    # our arguments
+    parser.add_argument("--run-name", default="tsp", type=str)
+    parser.add_argument("--proportions", nargs=3, default=None, type=float)
+    parser.add_argument("--device_id", default=0, type=int)
+    parser.add_argument("--log_dir", default=None)
+
+    # debug flag: short circuits training cycle
+    parser.add_argument("--debug", dest="debug", default=False, action="store_true")
+
+    return parser.parse_args()
 
 
-class Logger:
-    """
-    Logging object for training runs.
-    """
+class Run:
+    """Object controlling runs."""
 
-    def __init__(self, task, nodes, run_name):
+    def __init__(self, task, data_distrib, nodes, run_name, load=None):
         """
-        Initializes a logger object.
+        Initialize a run object. In order to load, task and nodes must be the
+        same as in the recorded run, while data_distrib and run_name do not.
+        This is to facilitate training on one distribution and testing on
+        another.
+
         Args:
             task: string, "tsp" or "vrp"
+            data_distrib: list of floats, latent vector representing
+                distributionfor points in dataset, where each float is between
+                0 and 1 and the sum is 1
             nodes: int, one of: [10, 20, 50, 100]
             run_name: string, describes current run
+            load: string, name of a run to be loaded
         """
+        # checking validity of input
         assert task in {"tsp", "vrp"}
+        for p in data_distrib:
+            assert isinstance(p, float) or isinstance(p, int)
+            assert p >= 0 and p <= 1
+        assert sum(data_distrib) == 1
         assert nodes in {10, 20, 50, 100}
         assert isinstance(run_name, str)
 
-        # initializing instance attributes
-        self._task = task
-        self._nodes = nodes
-        self._run_name = run_name
+        if load:
+            # parse directories from load name
+            load_task, load_nodes = load.split("-")[0:2]
+            assert task == load_task
+            assert nodes == load_nodes
 
-        # unpacking current datetime
-        curr_datetime = datetime.datetime.now()
-        curr_year = curr_datetime.year
-        curr_month = "{:02}".format(curr_datetime.month)
-        curr_day = "{:02}".format(curr_datetime.day)
-        curr_hour = "{:02}".format(curr_datetime.hour)
-        curr_minute = "{:02}".format(curr_datetime.minute)
-        curr_second = "{:02}".format(curr_datetime.second)
-        self._time = (
-            f"{curr_year}{curr_month}{curr_day}T{curr_hour}{curr_minute}{curr_second}"
-        )
+        # generating current datetime
+        # this is a bit hacky but I don't have time to make it better
+        c_datetime = datetime.datetime.now()
+        c_year = curr_datetime.year
+        c_month = "{:02}".format(curr_datetime.month)
+        c_day = "{:02}".format(curr_datetime.day)
+        c_hour = "{:02}".format(curr_datetime.hour)
+        c_min = "{:02}".format(curr_datetime.minute)
+        c_sec = "{:02}".format(curr_datetime.second)
+        curr_time_str = f"{c_year}{c_month}{c_day}T{c_hour}{c_min}{c_sec}"
 
-        # superdirectory name
-        self._superdir_name = f"{task}-{nodes}"
+        # getting parentdir
+        parentdir = self._get_parentdir(task, nodes)
 
-        # namestring
-        self._name = f"{self._task}-{self._nodes}-{self._run_name}-{self._time}"
+        # generating name
+        name = load if load else f"{task}-{nodes}-{run_name}-{curr_time_str}"
 
-        # creating superdirectory
-        self._superdir = os.path.join(LOG_DIR, self._superdir_name)
-        if not os.path.exists(self._superdir):
-            os.makedirs(self._superdir)
-
-        # creating directory
-        self.dir = os.path.join(self._superdir, self._name)
-        if not os.path.exists(self.dir):
-            os.makedirs(self.dir)
-
-        # creating log file
-        self._logfile = os.path.join(self.dir, "log.log")
-        with open(self._logfile, "a+") as f:
-            f.write(f"Current device: {device}\n")
-
-        # creating validate and checkpoint subdirs
+        # initializing attributes
+        self.task = task
+        self.data_distrib = data_distrib
+        self.nodes = nodes
+        self.dir = os.path.join(parentdir, name)
         self.validate_dir = os.path.join(self.dir, "validate")
-        if not os.path.exists(self.validate_dir):
-            os.makedirs(self.validate_dir)
-
         self.checkpoint_dir = os.path.join(self.dir, "checkpoints")
-        if not os.path.exists(self.checkpoint_dir):
+        self.actor_path = os.path.join(self.dir, "actor.pt")
+        self.critic_path = os.path.join(self.dir, "critic.pt")
+        self._logfile = os.path.join(self.dir, "log.log")
+
+        # creating/checking directories, if necessary
+        if load:
+            # things must exist
+            assert os.path.exists(self.dir)
+            assert os.path.exists(self.validate_dir)
+            assert os.path.exists(self.checkpoint_dir)
+            assert os.path.exists(self.actor_path)
+            assert os.path.exists(self.critic_path)
+            assert os.path.exists(self._logfile)
+        else:
+            # things must not yet exist, and need to be created
+            assert not os.path.exists(self.dir)
+            assert not os.path.exists(self.validate_dir)
+            assert not os.path.exists(self.checkpoint_dir)
+            assert not os.path.exists(self.actor_path)
+            assert not os.path.exists(self.critic_path)
+            assert not os.path.exists(self._logfile)
+            os.makedirs(self.dir)
+            os.makedirs(self.validate_dir)
             os.makedirs(self.checkpoint_dir)
+
+        # initializing log file
+        self.log(f"Run {curr_time_str}\n")
+        self.log(f"Current device: {device}\n")
+        self.log(f"Current data distribution: {data_distrib}\n")
 
     def log(self, message):
         """Writes a line to the log file."""
         with open(self._logfile, "a+") as f:
             f.write(message)
+
+    def _get_parentdir(self, task, nodes):
+        """Return parentdir path, throw error if it does not exist."""
+        parentdir_name = f"{task}-{nodes}"
+        parentdir = os.path.join(LOG_DIR, parentdir_name)
+        assert os.path.exists(parentdir), f"Parent directory {parentdir} does not exist"
+        return parentdir
 
 
 def test(
@@ -321,7 +330,14 @@ def train(
 
                 logger.log(
                     "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
-                    % (epoch, batch_idx, len(train_loader), mean_reward, mean_loss, times[-1])
+                    % (
+                        epoch,
+                        batch_idx,
+                        len(train_loader),
+                        mean_reward,
+                        mean_loss,
+                        times[-1],
+                    )
                 )
 
             if kwargs["debug"]:
@@ -381,6 +397,7 @@ def train(
 
 
 def train_tsp(args):
+    """Main method for training model for tsp task."""
 
     # Goals from paper:
     # TSP20, 3.97
@@ -393,7 +410,7 @@ def train_tsp(args):
         args.valid_size = 10
 
     # initializing logger
-    logger = Logger(args.task, args.num_nodes, args.run_name)
+    logger = Logger(args.task, args.num_nodes, args.run_name, args.log_dir)
 
     # creating datasets
     train_data = TSPDataset(
@@ -526,43 +543,22 @@ def train_vrp(args):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Combinatorial Optimization")
+    # parsing args
+    args = parse_arguments()
 
-    # their arguments
-    parser.add_argument("--seed", default=12345, type=int)
-    parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--test", action="store_true", default=False)
-    parser.add_argument("--task", default="tsp")
-    parser.add_argument("--nodes", dest="num_nodes", default=20, type=int)
-    parser.add_argument("--actor_lr", default=5e-4, type=float)
-    parser.add_argument("--critic_lr", default=5e-4, type=float)
-    parser.add_argument("--max_grad_norm", default=2.0, type=float)
-    parser.add_argument("--batch_size", default=256, type=int)
-    parser.add_argument("--hidden", dest="hidden_size", default=128, type=int)
-    parser.add_argument("--dropout", default=0.1, type=float)
-    parser.add_argument("--layers", dest="num_layers", default=1, type=int)
-    parser.add_argument("--train-size", default=1000000, type=int)
-    parser.add_argument("--valid-size", default=1000, type=int)
-
-    # our arguments
-    parser.add_argument("--run-name", default="tsp", type=str)
-    parser.add_argument("--proportions", nargs=3, default=None, type=float)
-    parser.add_argument("--device_id", default=0, type=int)
-
-    # debug flag: short circuits training cycle
-    parser.add_argument(
-        "--debug", dest="debug", default=False, action="store_true")
-
-    args = parser.parse_args()
+    # loading from log_dir for evaluation
+    # sample log_dir: tsp-20-1.00-0.00-0.00-20201114T193737
+    # args.log_dir = os.path.join(LOG_DIR, f"{args.task}-{args.")
 
     # print('NOTE: SETTTING CHECKPOINT: ')
     # args.checkpoint = os.path.join('vrp', '10', '12_59_47.350165' + os.path.sep)
     # print(args.checkpoint)
 
-    with torch.cuda.device(args.device_id):
-        if args.task == "tsp":
-            train_tsp(args)
-        elif args.task == "vrp":
-            train_vrp(args)
-        else:
-            raise ValueError("Task <%s> not understood" % args.task)
+    if DEVICE == "cuda":
+        with torch.cuda.device(args.device_id):
+            if args.task == "tsp":
+                train_tsp(args)
+            elif args.task == "vrp":
+                train_vrp(args)
+            else:
+                raise ValueError("Task <%s> not understood" % args.task)

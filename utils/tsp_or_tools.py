@@ -36,14 +36,16 @@ def get_route_distance(data, manager, routing, solution):
 
         previous_node = manager.IndexToNode(previous_index)
         node = manager.IndexToNode(index)
-        route_distance += data["distance_matrix"][previous_node][node].item() / data["factor"]
+        route_distance += (
+            data["distance_matrix"][previous_node][node].item() / data["factor"]
+        )
     return route_distance
 
 
 def get_or_tsp(locs):
     """Entry point of the program."""
     # Instantiate the data problem.
-    data = create_data_model(locs, factor=100)
+    data = create_data_model(locs, factor=1000)
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(
@@ -79,22 +81,13 @@ def get_or_tsp(locs):
     distance_dimension.SetGlobalSpanCostCoefficient(100)  # not sure what this does
 
     # Setting guided local search heuristic
-    # This seems to be pretty slow...? it's not clear it does better either...
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_parameters.time_limit.seconds = 10
+    search_parameters.time_limit.seconds = 10  # reduce if necessary
     search_parameters.log_search = False
     solution = routing.SolveWithParameters(search_parameters)
-
-    # Setting first solution heuristic.
-    # This is really rather bad
-    # search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    # search_parameters.first_solution_strategy = (
-    #     routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    # )
-    # solution = routing.SolveWithParameters(search_parameters)
 
     # Print solution on console.
     if solution:

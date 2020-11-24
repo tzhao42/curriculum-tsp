@@ -12,17 +12,17 @@ import torch
 from torch.utils.data import Dataset
 from torch.autograd import Variable
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
 class VehicleRoutingDataset(Dataset):
-    def __init__(self, num_samples, input_size, max_load=20, max_demand=9,
-                 seed=None):
+    def __init__(self, num_samples, input_size, max_load=20, max_demand=9, seed=None):
         super(VehicleRoutingDataset, self).__init__()
 
         if max_load < max_demand:
-            raise ValueError(':param max_load: must be > max_demand')
+            raise ValueError(":param max_load: must be > max_demand")
 
         if seed is None:
             seed = np.random.randint(1234567890)
@@ -41,10 +41,10 @@ class VehicleRoutingDataset(Dataset):
         # Note that we only use a load between [0, 1] to prevent large
         # numbers entering the neural network
         dynamic_shape = (num_samples, 1, input_size + 1)
-        loads = torch.full(dynamic_shape, 1.)
+        loads = torch.full(dynamic_shape, 1.0)
 
-        # All states will have their own intrinsic demand in [1, max_demand), 
-        # then scaled by the maximum load. E.g. if load=10 and max_demand=30, 
+        # All states will have their own intrinsic demand in [1, max_demand),
+        # then scaled by the maximum load. E.g. if load=10 and max_demand=30,
         # demands will be scaled to the range (0, 3)
         demands = torch.randint(1, max_demand + 1, dynamic_shape)
         demands = demands / float(max_load)
@@ -74,7 +74,7 @@ class VehicleRoutingDataset(Dataset):
         # If there is no positive demand left, we can end the tour.
         # Note that the first node is the depot, which always has a negative demand
         if demands.eq(0).all():
-            return demands * 0.
+            return demands * 0.0
 
         # Otherwise, we can choose to go anywhere where demand is > 0
         new_mask = demands.ne(0) * demands.lt(loads)
@@ -83,9 +83,9 @@ class VehicleRoutingDataset(Dataset):
         repeat_home = chosen_idx.ne(0)
 
         if repeat_home.any():
-            new_mask[repeat_home.nonzero(), 0] = 1.
+            new_mask[repeat_home.nonzero(), 0] = 1.0
         if (1 - repeat_home).any():
-            new_mask[(1 - repeat_home).nonzero(), 0] = 0.
+            new_mask[(1 - repeat_home).nonzero(), 0] = 0.0
 
         # ... unless we're waiting for all other samples in a minibatch to finish
         has_no_load = loads[:, 0].eq(0).float()
@@ -93,8 +93,8 @@ class VehicleRoutingDataset(Dataset):
 
         combined = (has_no_load + has_no_demand).gt(0)
         if combined.any():
-            new_mask[combined.nonzero(), 0] = 1.
-            new_mask[combined.nonzero(), 1:] = 0.
+            new_mask[combined.nonzero(), 0] = 1.0
+            new_mask[combined.nonzero(), 1:] = 0.0
 
         return new_mask.float()
 
@@ -123,13 +123,15 @@ class VehicleRoutingDataset(Dataset):
             visit_idx = visit.nonzero().squeeze()
 
             all_loads[visit_idx] = new_load[visit_idx]
-            all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(-1)
-            all_demands[visit_idx, 0] = -1. + new_load[visit_idx].view(-1)
+            all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(
+                -1
+            )
+            all_demands[visit_idx, 0] = -1.0 + new_load[visit_idx].view(-1)
 
         # Return to depot to fill vehicle load
         if depot.any():
-            all_loads[depot.nonzero().squeeze()] = 1.
-            all_demands[depot.nonzero().squeeze(), 0] = 0.
+            all_loads[depot.nonzero().squeeze()] = 1.0
+            all_demands[depot.nonzero().squeeze(), 0] = 0.0
 
         tensor = torch.cat((all_loads.unsqueeze(1), all_demands.unsqueeze(1)), 1)
         return torch.tensor(tensor.data, device=dynamic.device)
@@ -159,12 +161,11 @@ def reward(static, tour_indices):
 def render(static, tour_indices, save_path):
     """Plots the found solution."""
 
-    plt.close('all')
+    plt.close("all")
 
     num_plots = 3 if int(np.sqrt(len(tour_indices))) >= 3 else 1
 
-    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots,
-                           sharex='col', sharey='row')
+    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots, sharex="col", sharey="row")
 
     if num_plots == 1:
         axes = [[axes]]
@@ -196,17 +197,17 @@ def render(static, tour_indices, save_path):
             if low + 1 == high:
                 continue
 
-            ax.plot(x[low: high + 1], y[low: high + 1], zorder=1, label=j)
+            ax.plot(x[low : high + 1], y[low : high + 1], zorder=1, label=j)
 
         ax.legend(loc="upper right", fontsize=3, framealpha=0.5)
-        ax.scatter(x, y, s=4, c='r', zorder=2)
-        ax.scatter(x[0], y[0], s=20, c='k', marker='*', zorder=3)
+        ax.scatter(x, y, s=4, c="r", zorder=2)
+        ax.scatter(x[0], y[0], s=20, c="k", marker="*", zorder=3)
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
 
     plt.tight_layout()
-    plt.savefig(save_path, bbox_inches='tight', dpi=200)
+    plt.savefig(save_path, bbox_inches="tight", dpi=200)
 
 
 '''
