@@ -17,7 +17,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Parameterization for graph
 # Parmaeterize graph as an N_TILES x N_TILES grid of tiles, each of which has
 # a weighted probability of having points spawn within it.
-NUM_TILES = 8 
+NUM_TILES = 8
 
 # Parameters for models
 STATIC_SIZE = 2  # (x, y)

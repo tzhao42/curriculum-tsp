@@ -5,6 +5,7 @@ import torch
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
+
 def create_data_model(locs, factor):
     """Stores the data for the problem, distances scaled up by factor.
 

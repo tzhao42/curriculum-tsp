@@ -23,14 +23,14 @@ class TSPDataset(Dataset):
     def __init__(
         self, size=50, num_samples=1e6, seed=None, proportions=[1.0, 0.0, 0.0]
     ):
-    """Create TSP dataset.
+        """Create TSP dataset.
 
-    Args:
-        size (int): number of nodes per problem instance
-        num_samples (int): number of problem instances in dataset
-        seed (int): random seed
-        proportions (List[float]): *to be removed*
-    """
+        Args:
+            size (int): number of nodes per problem instance
+            num_samples (int): number of problem instances in dataset
+            seed (int): random seed
+            proportions (List[float]): *to be removed*
+        """
         # unit square, medium corners (0.2), small corners (0.01)
         super(TSPDataset, self).__init__()
 

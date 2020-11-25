@@ -80,10 +80,7 @@ def parse_arguments():
     parser.add_argument("--batch-size", default=256, type=int)
 
     # debug flag: short circuits training cycle
-    parser.add_argument(
-        "--debug", dest="debug", default=False, action="store_true"
-    )
-
+    parser.add_argument("--debug", dest="debug", default=False, action="store_true")
 
     return parser.parse_args()
 
@@ -131,7 +128,7 @@ class RunIO:
     def __init__(self, task, nodes, run_name, load=None):
         """Initialize a run object.
 
-        In order to load, task and nodes must be the same as in the recorded 
+        In order to load, task and nodes must be the same as in the recorded
         run, while run_name does not (it is ignored). This is checked in the
         check_args_valid function.
 
@@ -203,14 +200,11 @@ class RunIO:
         """Return parentdir path, throw error if it does not exist."""
         parentdir_name = f"{task}-{nodes}"
         parentdir = os.path.join(LOG_DIR, parentdir_name)
-        assert os.path.exists(parentdir), \
-            f"Parent directory {parentdir} does not exist"
+        assert os.path.exists(parentdir), f"Parent directory {parentdir} does not exist"
         return parentdir
 
 
-def test(
-    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
-):
+def test(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None):
     """Compare performance of model and google OR tools"""
 
     actor.eval()
@@ -246,9 +240,7 @@ def test(
     return np.mean(optimality_gaps)
 
 
-def validate(
-    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
-):
+def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None):
     """Used to monitor progress on a validation set & optionally plot solution."""
 
     actor.eval()
@@ -387,12 +379,7 @@ def train(
 
         # Save rendering of validation set tours
         mean_valid = validate(
-            valid_loader,
-            actor,
-            reward_fn,
-            render_fn,
-            num_plot=5,
-            run_io=run_io
+            valid_loader, actor, reward_fn, render_fn, num_plot=5, run_io=run_io
         )
 
         # Save best models
@@ -446,9 +433,7 @@ def main_tsp(args, run_io):
         args.dropout,
     )
 
-    critic = StateCritic(
-        STATIC_SIZE, TSP_DYNAMIC_SIZE, args.hidden_size
-    )
+    critic = StateCritic(STATIC_SIZE, TSP_DYNAMIC_SIZE, args.hidden_size)
 
     # load models to cpu if necessary
     if args.load:
@@ -462,7 +447,7 @@ def main_tsp(args, run_io):
             run_io.critic_path, map_location=torch.device("cpu")
         )
         critic.load_state_dict(saved_critic_state_dict)
-    
+
     # sending to proper device
     actor.to(DEVICE)
     critic.to(DEVICE)
@@ -478,8 +463,8 @@ def main_tsp(args, run_io):
         # train only for train mode
         train(actor, critic, run_io=run_io, **kwargs)
     elif args.mode == "test":
-        # test only for test mode 
-        
+        # test only for test mode
+
         # currently this a hacky thing
         test_proportions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
         test_names = ["uniform", "shifted", "adversary"]
@@ -491,19 +476,15 @@ def main_tsp(args, run_io):
                 args.seed + 2,
                 proportions=test_proportions[test_id],
             )
-            test_loader = DataLoader(test_data, args.batch_size, shuffle=False, num_workers=0)
+            test_loader = DataLoader(
+                test_data, args.batch_size, shuffle=False, num_workers=0
+            )
             out = test(
-                test_loader,
-                actor,
-                tsp.reward,
-                tsp.render,
-                num_plot=5,
-                run_io=run_io
+                test_loader, actor, tsp.reward, tsp.render, num_plot=5, run_io=run_io
             )
             run_io.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
     elif args.mode == "all":
         raise NotImplementedError("args.mode == all is not yet supported.")
-    
 
 
 def main_vrp(args, run_io):
@@ -575,7 +556,6 @@ def main_vrp(args, run_io):
     print("Average tour length: ", out)
 
 
-
 def main(args, run_io):
     """Main method for script."""
     if args.task == "tsp":
@@ -585,7 +565,6 @@ def main(args, run_io):
     else:
         print("ERROR: Something has gone horribly wrong.")
         sys.exit(-1)
-
 
 
 if __name__ == "__main__":
@@ -611,4 +590,3 @@ if __name__ == "__main__":
             main(args, curr_run_io)
     else:
         main(args, curr_run_io)
-
