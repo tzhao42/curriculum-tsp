@@ -74,11 +74,10 @@ class TSPDataset(Dataset):
         # (static, dynamic, start_loc)
         return (self.dataset[idx], self.dynamic[idx], [])
 
-
-def update_mask(mask, dynamic, chosen_idx):
-    """Marks the visited city, so it can't be selected a second time."""
-    mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
-    return mask
+    def update_mask(self, mask, dynamic, chosen_idx):
+        """Marks the visited city, so it can't be selected a second time."""
+        mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
+        return mask
 
 
 def reward(static, tour_indices):

@@ -19,7 +19,18 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from constants import BASE_DIR, LOG_DIR, DEVICE
+from constants import (
+    BASE_DIR,
+    LOG_DIR,
+    DEVICE,
+    DEBUG,
+    N_TILES,
+    STATIC_SIZE,
+    TSP_DYNAMIC_SIZE,
+    VRP_LOAD_DICT,
+    VRP_MAX_DEMAND,
+    VRP_DYNAMIC_SIZE,
+)
 from models import DRL4TSP, Encoder, StateCritic
 
 from datasets import tsp, vrp
@@ -30,81 +41,109 @@ from utils import tsp_or_tools
 from utils.tsp_or_tools import get_batched_or_tsp
 
 
+def set_debug(val):
+    """Set debug flag to value specified in val."""
+    global DEBUG
+    DEBUG = val
+
+
 def parse_arguments():
     """Parse arguments."""
     parser = argparse.ArgumentParser(description="Combinatorial Optimization")
 
-    # their arguments
-
-    # set random seed
+    # random seed
     parser.add_argument("--seed", default=12345, type=int)
 
-    # current_run
-    parser.add_argument("--task", default="tsp")
-    parser.add_argument("--test", action="store_true", default=False)
+    # current run and io
+    parser.add_argument("--mode", default="train")
+    parser.add_argument("--run-name", default=None)
+    parser.add_argument("--device_id", default=0, type=int)
+    parser.add_argument("--load", default=None)
 
-    # current task
+    # current task/dataset
+    parser.add_argument("--task", default="tsp")
     parser.add_argument("--train-size", default=1000000, type=int)
     parser.add_argument("--valid-size", default=1000, type=int)
     parser.add_argument("--nodes", dest="num_nodes", default=20, type=int)
+    parser.add_argument("--proportions", nargs=3, default=None, type=float)
+    # parser.add_argument("--data_distrib", nargs=3, default=None, type=float)
 
-    # model and training params
-    parser.add_argument("--actor_lr", default=5e-4, type=float)
-    parser.add_argument("--critic_lr", default=5e-4, type=float)
-    parser.add_argument("--max_grad_norm", default=2.0, type=float)
-    parser.add_argument("--batch_size", default=256, type=int)
+    # model params
     parser.add_argument("--hidden", dest="hidden_size", default=128, type=int)
     parser.add_argument("--dropout", default=0.1, type=float)
     parser.add_argument("--layers", dest="num_layers", default=1, type=int)
 
-    # parser.add_argument("--checkpoint", default=None)
-
-    # our arguments
-    parser.add_argument("--run-name", default="tsp", type=str)
-    parser.add_argument("--proportions", nargs=3, default=None, type=float)
-    parser.add_argument("--device_id", default=0, type=int)
-    parser.add_argument("--log_dir", default=None)
+    # training/testing params
+    parser.add_argument("--actor_lr", default=5e-4, type=float)
+    parser.add_argument("--critic_lr", default=5e-4, type=float)
+    parser.add_argument("--max_grad_norm", default=2.0, type=float)
+    parser.add_argument("--batch_size", default=256, type=int)
 
     # debug flag: short circuits training cycle
-    parser.add_argument("--debug", dest="debug", default=False, action="store_true")
+    parser.add_argument(
+        "--debug", dest="debug", default=False, action="store_true"
+    )
+
 
     return parser.parse_args()
 
 
-class Run:
-    """Object controlling runs."""
+def check_args_valid(args):
+    """Check whether a set of args are valid."""
+    assert isinstance(args.seed, int)
+    assert args.mode in {"train", "test", "all"}
+    assert isinstance(args.run_name, str)
+    assert isinstance(args.device_id, int)
+    assert args.device_id + 1 <= torch.cuda.device_count()
+    if args.load:
+        # parse task and nodes from load name
+        load_task, load_nodes = args.load.split("-")[0:2]
+        assert args.task == load_task
+        assert args.nodes == load_nodes
+    assert args.task in {"tsp", "vrp"}
+    assert isinstance(args.train_size, int)
+    assert isinstance(args.valid_size, int)
+    assert isinstance(args.nodes, int)
+    # assert len(args.data_distrib) == N_TILES ** 2
+    for p in args.data_distrib:
+        assert p >= 0 and p <= 1
+    assert sum(args.data_distrib) == 1
+    assert isinstance(args.hidden, int)
+    assert isinstance(args.dropout, float)
+    assert isinstance(args.layers, int)
+    assert isinstance(args.actor_lr, float)
+    assert isinstance(args.critic_lr, float)
+    assert isinstance(args.max_grad_norm, float)
+    assert isinstance(args.batch_size, int)
+    assert isinstance(args.debug, bool)
 
-    def __init__(self, task, data_distrib, nodes, run_name, load=None):
-        """
-        Initialize a run object. In order to load, task and nodes must be the
-        same as in the recorded run, while data_distrib and run_name do not.
-        This is to facilitate training on one distribution and testing on
-        another.
+
+class RunIO:
+    """Object controlling io in runs.
+
+    Attributes
+        dir: log directory for this run
+        validate_dir: validation directory for this run
+        checkpoint_dir: checkpoint directory for this run
+        actor_path: path to saved best actor
+        critic_path: path to saved best critic
+    """
+
+    def __init__(self, task, nodes, run_name, load=None):
+        """Initialize a run object.
+
+        In order to load, task and nodes must be the same as in the recorded 
+        run, while run_name does not (it is ignored). This is checked in the
+        check_args_valid function.
+
+        (Yes this is over-engineered.)
 
         Args:
             task: string, "tsp" or "vrp"
-            data_distrib: list of floats, latent vector representing
-                distributionfor points in dataset, where each float is between
-                0 and 1 and the sum is 1
             nodes: int, one of: [10, 20, 50, 100]
             run_name: string, describes current run
-            load: string, name of a run to be loaded
+            load: string, name of a run to be loaded (i.e., tsp-20-epicmodel)
         """
-        # checking validity of input
-        assert task in {"tsp", "vrp"}
-        for p in data_distrib:
-            assert isinstance(p, float) or isinstance(p, int)
-            assert p >= 0 and p <= 1
-        assert sum(data_distrib) == 1
-        assert nodes in {10, 20, 50, 100}
-        assert isinstance(run_name, str)
-
-        if load:
-            # parse directories from load name
-            load_task, load_nodes = load.split("-")[0:2]
-            assert task == load_task
-            assert nodes == load_nodes
-
         # generating current datetime
         # this is a bit hacky but I don't have time to make it better
         c_datetime = datetime.datetime.now()
@@ -123,9 +162,6 @@ class Run:
         name = load if load else f"{task}-{nodes}-{run_name}-{curr_time_str}"
 
         # initializing attributes
-        self.task = task
-        self.data_distrib = data_distrib
-        self.nodes = nodes
         self.dir = os.path.join(parentdir, name)
         self.validate_dir = os.path.join(self.dir, "validate")
         self.checkpoint_dir = os.path.join(self.dir, "checkpoints")
@@ -168,12 +204,13 @@ class Run:
         """Return parentdir path, throw error if it does not exist."""
         parentdir_name = f"{task}-{nodes}"
         parentdir = os.path.join(LOG_DIR, parentdir_name)
-        assert os.path.exists(parentdir), f"Parent directory {parentdir} does not exist"
+        assert os.path.exists(parentdir), \
+            f"Parent directory {parentdir} does not exist"
         return parentdir
 
 
 def test(
-    data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None, debug=False
+    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
 ):
     """Compare performance of model and google OR tools"""
 
@@ -193,17 +230,17 @@ def test(
 
         # compute optimality gap
         model_tour_lengths = reward_fn(static, tour_indices)
-        optimal_tour_lengths = get_batched_or_tsp(static)  # not actually exact solution
+        optimal_tour_lengths = get_batched_or_tsp(static)
         curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
         mean_opt_gap = curr_opt_gaps.mean().item()
         optimality_gaps.append(mean_opt_gap)
 
         if render_fn is not None and batch_idx < num_plot:
             name = "batch%d_%2.4f.png" % (batch_idx, mean_opt_gap)
-            path = os.path.join(logger.validate_dir, name)
+            path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
 
-        if debug:
+        if DEBUG:
             break
 
     actor.train()
@@ -211,7 +248,7 @@ def test(
 
 
 def validate(
-    data_loader, actor, reward_fn, render_fn=None, num_plot=5, logger=None, debug=False
+    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
 ):
     """Used to monitor progress on a validation set & optionally plot solution."""
 
@@ -234,10 +271,10 @@ def validate(
 
         if render_fn is not None and batch_idx < num_plot:
             name = "batch%d_%2.4f.png" % (batch_idx, reward)
-            path = os.path.join(logger.validate_dir, name)
+            path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
 
-        if debug:
+        if DEBUG:
             break
 
     actor.train()
@@ -257,19 +294,17 @@ def train(
     actor_lr,
     critic_lr,
     max_grad_norm,
-    logger=None,
+    run_io=None,
     **kwargs,
 ):
-    """Constructs the main actor & critic networks, and performs all training."""
+    """Constructs the main actor & critic networks, and performs training."""
+    # dataloaders
+    train_loader = DataLoader(train_data, batch_size, shuffle=True, num_workers=0)
+    valid_loader = DataLoader(valid_data, batch_size, shuffle=False, num_workers=0)
 
-    save_dir = logger.dir
-    checkpoint_dir = logger.checkpoint_dir
-
+    # optimizers
     actor_optim = optim.Adam(actor.parameters(), lr=actor_lr)
     critic_optim = optim.Adam(critic.parameters(), lr=critic_lr)
-
-    train_loader = DataLoader(train_data, batch_size, True, num_workers=0)
-    valid_loader = DataLoader(valid_data, batch_size, False, num_workers=0)
 
     best_params = None
     best_reward = np.inf
@@ -319,7 +354,7 @@ def train(
             rewards.append(torch.mean(reward.detach()).item())
             losses.append(torch.mean(actor_loss.detach()).item())
 
-            # if (batch_idx + 1) % 100 == 0:
+            # Logging training progress
             if batch_idx % 100 == 0:
                 end = time.time()
                 times.append(end - start)
@@ -328,7 +363,7 @@ def train(
                 mean_loss = np.mean(losses[-100:])
                 mean_reward = np.mean(rewards[-100:])
 
-                logger.log(
+                run_io.log(
                     "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
                     % (
                         epoch,
@@ -340,22 +375,16 @@ def train(
                     )
                 )
 
-            if kwargs["debug"]:
+            if DEBUG:
                 break
 
-        mean_loss = np.mean(losses)
-        mean_reward = np.mean(rewards)
-
-        # Save the weights
-        epoch_dir = os.path.join(checkpoint_dir, f"{epoch}")
+        # Save models for checkpointing
+        epoch_dir = os.path.join(run_io.checkpoint_dir, f"epoch-{epoch}")
         if not os.path.exists(epoch_dir):
             os.makedirs(epoch_dir)
 
-        save_path = os.path.join(epoch_dir, "actor.pt")
-        torch.save(actor.state_dict(), save_path)
-
-        save_path = os.path.join(epoch_dir, "critic.pt")
-        torch.save(critic.state_dict(), save_path)
+        torch.save(actor.state_dict(), os.path.join(epoch_dir, "actor.pt"))
+        torch.save(critic.state_dict(), os.path.join(epoch_dir, "critic.pt"))
 
         # Save rendering of validation set tours
         mean_valid = validate(
@@ -364,24 +393,22 @@ def train(
             reward_fn,
             render_fn,
             num_plot=5,
-            logger=logger,
-            debug=args.debug,
+            run_io=run_io
         )
 
-        # Save best model parameters
+        # Save best models
         if mean_valid < best_reward:
-
             best_reward = mean_valid
+            torch.save(actor.state_dict(), run_io.actor_path)
+            torch.save(critic.state_dict(), run_io.critic_path)
 
-            save_path = os.path.join(save_dir, "actor.pt")
-            torch.save(actor.state_dict(), save_path)
+        # Logging model evaluation
+        mean_loss = np.mean(losses)
+        mean_reward = np.mean(rewards)
 
-            save_path = os.path.join(save_dir, "critic.pt")
-            torch.save(critic.state_dict(), save_path)
-
-        logger.log(
+        run_io.log(
             "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
-            "(%2.4fs / 100 batches)\n"
+            "(%2.4fs / 100 batches)\n\n"
             % (
                 epoch,
                 mean_loss,
@@ -392,93 +419,84 @@ def train(
             )
         )
 
-        if kwargs["debug"]:
+        if DEBUG:
             break
 
 
-def train_tsp(args):
-    """Main method for training model for tsp task."""
-
-    # Goals from paper:
-    # TSP20, 3.97
-    # TSP50, 6.08
-    # TSP100, 8.44
-
+def main_tsp(args, run_io):
+    """Main method for training/testing model for tsp task."""
     # checking if debug
-    if args.debug:
-        args.train_size = 10
-        args.valid_size = 10
-
-    # initializing logger
-    logger = Logger(args.task, args.num_nodes, args.run_name, args.log_dir)
 
     # creating datasets
     train_data = TSPDataset(
         args.num_nodes, args.train_size, args.seed, args.proportions
     )
-    # train_data = TSPDataset(args.num_nodes, args.train_size, args.seed, proportions=[0,1.0,0])
+
     valid_data = TSPDataset(
         args.num_nodes, args.valid_size, args.seed + 1, args.proportions
     )
-    # valid_data = TSPDataset(args.num_nodes, args.valid_size, args.seed + 1, proportions=[0,1.0,0])
 
-    STATIC_SIZE = 2  # (x, y)
-    DYNAMIC_SIZE = 1  # dummy for compatibility
-
-    update_fn = None
-
+    # creating models
     actor = DRL4TSP(
         STATIC_SIZE,
-        DYNAMIC_SIZE,
+        TSP_DYNAMIC_SIZE,
         args.hidden_size,
-        update_fn,
-        tsp.update_mask,
+        None,
+        train_data.update_mask,
         args.num_layers,
         args.dropout,
-    ).to(device)
+    ).to(DEVICE)
 
-    critic = StateCritic(STATIC_SIZE, DYNAMIC_SIZE, args.hidden_size).to(device)
+    critic = StateCritic(
+        STATIC_SIZE, TSP_DYNAMIC_SIZE, args.hidden_size
+    ).to(DEVICE)
 
+    # load models if necessary
+    if run_io.load:
+        actor.load_state_dict(torch.load(run.actor_path))
+        critic.load_state_dict(torch.load(run.critic_path))
+
+    # supplement arguments
     kwargs = vars(args)
     kwargs["train_data"] = train_data
     kwargs["valid_data"] = valid_data
     kwargs["reward_fn"] = tsp.reward
     kwargs["render_fn"] = tsp.render
 
-    if args.checkpoint:
-        path = os.path.join(args.checkpoint, "actor.pt")
-        actor.load_state_dict(torch.load(path, device))
+    if args.mode == "train":
+        # train only for train mode
+        train(actor, critic, run=run, **kwargs)
+    elif args.mode == "test":
+        # test only for test mode 
+        
+        # currently this a hacky thing
+        test_proportions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        test_names = ["uniform", "shifted", "adversary"]
 
-        path = os.path.join(args.checkpoint, "critic.pt")
-        critic.load_state_dict(torch.load(path, device))
-
-    if not args.test:
-        train(actor, critic, logger=logger, **kwargs)
-
-    test_proportions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-    test_names = ["uniform", "shifted", "adversary"]
-
-    for test_id in range(0, 3):
-        test_data = TSPDataset(
-            args.num_nodes,
-            20,  # args.valid_size # cannot do too many because too slow
-            args.seed + 2,
-            proportions=test_proportions[test_id],
-        )
-        test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
-        out = test(
-            test_loader,
-            actor,
-            tsp.reward,
-            tsp.render,
-            num_plot=5,
-            logger=logger,
-            debug=args.debug,
-        )
-        logger.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
+        for test_id in range(0, 3):
+            test_data = TSPDataset(
+                args.num_nodes,
+                1000,
+                args.seed + 2,
+                proportions=test_proportions[test_id],
+            )
+            test_loader = DataLoader(test_data, args.batch_size, shuffle=False, num_workers=0)
+            out = test(
+                test_loader,
+                actor,
+                tsp.reward,
+                tsp.render,
+                num_plot=5,
+                logger=logger
+            )
+            logger.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
+    elif args.mode == "all":
+        raise NotImplementedError("args.mode == all is not yet supported.")
+    
 
 
-def train_vrp(args):
+def main_vrp(args, run_io):
+    # this function has not been refactored
 
     # Goals from paper:
     # VRP10, Capacity 20:  4.84  (Greedy)
@@ -487,24 +505,20 @@ def train_vrp(args):
     # VRP100, Capacity 50: 17.23  (Greedy)
 
     # Determines the maximum amount of load for a vehicle based on num nodes
-    LOAD_DICT = {10: 20, 20: 30, 50: 40, 100: 50}
-    MAX_DEMAND = 9
-    STATIC_SIZE = 2  # (x, y)
-    DYNAMIC_SIZE = 2  # (load, demand)
 
-    max_load = LOAD_DICT[args.num_nodes]
+    max_load = VRP_LOAD_DICT[args.num_nodes]
 
     train_data = VehicleRoutingDataset(
-        args.train_size, args.num_nodes, max_load, MAX_DEMAND, args.seed
+        args.train_size, args.num_nodes, max_load, VRP_MAX_DEMAND, args.seed
     )
 
     valid_data = VehicleRoutingDataset(
-        args.valid_size, args.num_nodes, max_load, MAX_DEMAND, args.seed + 1
+        args.valid_size, args.num_nodes, max_load, VRP_MAX_DEMAND, args.seed + 1
     )
 
     actor = DRL4TSP(
         STATIC_SIZE,
-        DYNAMIC_SIZE,
+        VRP_DYNAMIC_SIZE,
         args.hidden_size,
         train_data.update_dynamic,
         train_data.update_mask,
@@ -512,7 +526,7 @@ def train_vrp(args):
         args.dropout,
     ).to(device)
 
-    critic = StateCritic(STATIC_SIZE, DYNAMIC_SIZE, args.hidden_size).to(device)
+    critic = StateCritic(STATIC_SIZE, VRP_DYNAMIC_SIZE, args.hidden_size).to(device)
 
     kwargs = vars(args)
     kwargs["train_data"] = train_data
@@ -531,34 +545,38 @@ def train_vrp(args):
         train(actor, critic, **kwargs)
 
     test_data = VehicleRoutingDataset(
-        args.valid_size, args.num_nodes, max_load, MAX_DEMAND, args.seed + 2
+        args.valid_size, args.num_nodes, max_load, VRP_MAX_DEMAND, args.seed + 2
     )
 
     test_dir = "test"
-    test_loader = DataLoader(test_data, args.batch_size, False, num_workers=0)
+    test_loader = DataLoader(test_data, args.batch_size, shuffle=False, num_workers=0)
     out = validate(test_loader, actor, vrp.reward, vrp.render, test_dir, num_plot=5)
 
     print("Average tour length: ", out)
 
 
 if __name__ == "__main__":
-
     # parsing args
     args = parse_arguments()
 
-    # loading from log_dir for evaluation
-    # sample log_dir: tsp-20-1.00-0.00-0.00-20201114T193737
-    # args.log_dir = os.path.join(LOG_DIR, f"{args.task}-{args.")
+    # checking arguments for validity
+    check_args_valid(args)
 
-    # print('NOTE: SETTTING CHECKPOINT: ')
-    # args.checkpoint = os.path.join('vrp', '10', '12_59_47.350165' + os.path.sep)
-    # print(args.checkpoint)
+    # taking care of debug stuff
+    set_debug(args.debug)
+    if DEBUG:
+        args.train_size = 10
+        args.valid_size = 10
+
+    # setting up current runIO
+    curr_run_io = RunIO(args.task, args.nodes, args.run_name, args.load)
 
     if DEVICE == "cuda":
         with torch.cuda.device(args.device_id):
             if args.task == "tsp":
-                train_tsp(args)
+                main_tsp(args, run_io)
             elif args.task == "vrp":
-                train_vrp(args)
+                main_vrp(args, run_io)
             else:
-                raise ValueError("Task <%s> not understood" % args.task)
+                print("ERROR: Something has gone horribly wrong.")
+                sys.exit(-1)
