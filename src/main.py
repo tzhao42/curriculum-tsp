@@ -24,6 +24,7 @@ from constants import (
     DEVICE,
     DEBUG,
     N_TILES,
+    ORTOOLS_TSP_TIMEOUT,
     STATIC_SIZE,
     TSP_DYNAMIC_SIZE,
     VRP_LOAD_DICT,
@@ -64,7 +65,7 @@ def parse_arguments():
     parser.add_argument("--train-size", default=1000000, type=int)
     parser.add_argument("--valid-size", default=1000, type=int)
     parser.add_argument("--num-nodes", default=20, type=int)
-    parser.add_argument("--proportions", nargs=3, default=None, type=float)
+    # parser.add_argument("--proportions", nargs=3, default=None, type=float)
     # parser.add_argument("--data_distrib", nargs=3, default=None, type=float)
 
     # model params
@@ -106,10 +107,6 @@ def check_args_valid(args):
     assert isinstance(args.train_size, int)
     assert isinstance(args.valid_size, int)
     assert isinstance(args.num_nodes, int)
-    # assert len(args.data_distrib) == N_TILES ** 2
-    # for p in args.data_distrib:
-    #     assert p >= 0 and p <= 1
-    # assert sum(args.data_distrib) == 1
     assert isinstance(args.hidden_size, int)
     assert isinstance(args.dropout, float)
     assert isinstance(args.num_layers, int)
@@ -232,7 +229,7 @@ def test(
 
         # compute optimality gap
         model_tour_lengths = reward_fn(static, tour_indices)
-        optimal_tour_lengths = get_batched_or_tsp(static)
+        optimal_tour_lengths = get_batched_or_tsp(static, ORTOOLS_TSP_TIMEOUT)
         curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
         mean_opt_gap = curr_opt_gaps.mean().item()
         optimality_gaps.append(mean_opt_gap)
@@ -604,6 +601,7 @@ if __name__ == "__main__":
         args.train_size = 10
         args.valid_size = 10
         args.batch_size = 2
+        ORTOOLS_TSP_TIMEOUT = 1
 
     # setting up current runIO
     curr_run_io = RunIO(args.task, args.num_nodes, args.run_name, args.load)

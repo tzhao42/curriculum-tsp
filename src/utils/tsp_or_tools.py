@@ -5,9 +5,6 @@ import torch
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
-ORTOOLS_TIMEOUT = 10
-# ORTOOLS_TIMEOUT = 1 # for debugging
-
 def create_data_model(locs, factor):
     """Stores the data for the problem, distances scaled up by factor.
 
@@ -44,7 +41,7 @@ def get_route_distance(data, manager, routing, solution):
     return route_distance
 
 
-def get_or_tsp(locs):
+def get_or_tsp(locs, timeout):
     """Entry point of the program."""
     # Instantiate the data problem.
     data = create_data_model(locs, factor=1000)
@@ -87,7 +84,7 @@ def get_or_tsp(locs):
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_parameters.time_limit.seconds = ORTOOLS_TIMEOUT
+    search_parameters.time_limit.seconds = timeout
     search_parameters.log_search = False
     solution = routing.SolveWithParameters(search_parameters)
 
@@ -98,7 +95,7 @@ def get_or_tsp(locs):
         raise ValueError("Google OR tools failed.")
 
 
-def get_batched_or_tsp(locs):
+def get_batched_or_tsp(locs, timeout):
     """Compute near-optimal tsp route on batch.
 
     Args:
@@ -111,7 +108,7 @@ def get_batched_or_tsp(locs):
     tour_lengths = []
     for i in range(locs.size(0)):
         curr_instance = locs[i]
-        tour_length = get_or_tsp(curr_instance)
+        tour_length = get_or_tsp(curr_instance, timeout)
         tour_lengths.append(tour_length)
 
     # there are bugs in get_or_tsp :(
