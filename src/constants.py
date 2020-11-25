@@ -1,13 +1,11 @@
-"""
-Constants for operation.
-"""
+"""Constants for operation."""
 
 import os
 import pathlib
 
 import torch
 
-# Directory containing 6883-vrp repo
+# Directory containing 6883-vrp repo src
 BASE_DIR = pathlib.Path(__file__).parent.absolute().parents[0]
 
 # Directory for logs

@@ -5,6 +5,8 @@ import torch
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
+ORTOOLS_TIMEOUT = 10
+# ORTOOLS_TIMEOUT = 1 # for debugging
 
 def create_data_model(locs, factor):
     """Stores the data for the problem, distances scaled up by factor.
@@ -85,7 +87,7 @@ def get_or_tsp(locs):
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_parameters.time_limit.seconds = 10  # reduce if necessary
+    search_parameters.time_limit.seconds = ORTOOLS_TIMEOUT
     search_parameters.log_search = False
     solution = routing.SolveWithParameters(search_parameters)
 

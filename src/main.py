@@ -20,7 +20,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from constants import (
-    BASE_DIR,
     LOG_DIR,
     DEVICE,
     DEBUG,
@@ -33,9 +32,9 @@ from constants import (
 )
 from models import DRL4TSP, Encoder, StateCritic
 
-from datasets import tsp, vrp
-from datasets.tsp import TSPDataset
-from datasets.vrp import VehicleRoutingDataset
+from tasks import tsp, vrp
+from tasks.tsp import TSPDataset
+from tasks.vrp import VehicleRoutingDataset
 
 from utils import tsp_or_tools
 from utils.tsp_or_tools import get_batched_or_tsp
@@ -57,27 +56,27 @@ def parse_arguments():
     # current run and io
     parser.add_argument("--mode", default="train")
     parser.add_argument("--run-name", default=None)
-    parser.add_argument("--device_id", default=0, type=int)
+    parser.add_argument("--device-id", default=0, type=int)
     parser.add_argument("--load", default=None)
 
     # current task/dataset
     parser.add_argument("--task", default="tsp")
     parser.add_argument("--train-size", default=1000000, type=int)
     parser.add_argument("--valid-size", default=1000, type=int)
-    parser.add_argument("--nodes", dest="num_nodes", default=20, type=int)
+    parser.add_argument("--num-nodes", default=20, type=int)
     parser.add_argument("--proportions", nargs=3, default=None, type=float)
     # parser.add_argument("--data_distrib", nargs=3, default=None, type=float)
 
     # model params
-    parser.add_argument("--hidden", dest="hidden_size", default=128, type=int)
+    parser.add_argument("--hidden-size", default=128, type=int)
     parser.add_argument("--dropout", default=0.1, type=float)
-    parser.add_argument("--layers", dest="num_layers", default=1, type=int)
+    parser.add_argument("--num-layers", default=1, type=int)
 
     # training/testing params
-    parser.add_argument("--actor_lr", default=5e-4, type=float)
-    parser.add_argument("--critic_lr", default=5e-4, type=float)
-    parser.add_argument("--max_grad_norm", default=2.0, type=float)
-    parser.add_argument("--batch_size", default=256, type=int)
+    parser.add_argument("--actor-lr", default=5e-4, type=float)
+    parser.add_argument("--critic-lr", default=5e-4, type=float)
+    parser.add_argument("--max-grad-norm", default=2.0, type=float)
+    parser.add_argument("--batch-size", default=256, type=int)
 
     # debug flag: short circuits training cycle
     parser.add_argument(
@@ -94,23 +93,26 @@ def check_args_valid(args):
     assert args.mode in {"train", "test", "all"}
     assert isinstance(args.run_name, str)
     assert isinstance(args.device_id, int)
-    assert args.device_id + 1 <= torch.cuda.device_count()
+    if DEVICE == "cpu":
+        assert args.device_id == 0
+    elif DEVICE == "cuda":
+        assert args.device_id + 1 <= torch.cuda.device_count()
     if args.load:
         # parse task and nodes from load name
         load_task, load_nodes = args.load.split("-")[0:2]
         assert args.task == load_task
-        assert args.nodes == load_nodes
+        assert args.num_nodes == int(load_nodes)
     assert args.task in {"tsp", "vrp"}
     assert isinstance(args.train_size, int)
     assert isinstance(args.valid_size, int)
-    assert isinstance(args.nodes, int)
+    assert isinstance(args.num_nodes, int)
     # assert len(args.data_distrib) == N_TILES ** 2
-    for p in args.data_distrib:
-        assert p >= 0 and p <= 1
-    assert sum(args.data_distrib) == 1
-    assert isinstance(args.hidden, int)
+    # for p in args.data_distrib:
+    #     assert p >= 0 and p <= 1
+    # assert sum(args.data_distrib) == 1
+    assert isinstance(args.hidden_size, int)
     assert isinstance(args.dropout, float)
-    assert isinstance(args.layers, int)
+    assert isinstance(args.num_layers, int)
     assert isinstance(args.actor_lr, float)
     assert isinstance(args.critic_lr, float)
     assert isinstance(args.max_grad_norm, float)
@@ -146,7 +148,7 @@ class RunIO:
         """
         # generating current datetime
         # this is a bit hacky but I don't have time to make it better
-        c_datetime = datetime.datetime.now()
+        curr_datetime = datetime.datetime.now()
         c_year = curr_datetime.year
         c_month = "{:02}".format(curr_datetime.month)
         c_day = "{:02}".format(curr_datetime.day)
@@ -191,9 +193,9 @@ class RunIO:
             os.makedirs(self.checkpoint_dir)
 
         # initializing log file
-        self.log(f"Run {curr_time_str}\n")
-        self.log(f"Current device: {device}\n")
-        self.log(f"Current data distribution: {data_distrib}\n")
+        self.log(f"\nRun {run_name} {curr_time_str}\n")
+        self.log(f"Current device: {DEVICE}\n")
+        # self.log(f"Current data distribution: {data_distrib}\n")
 
     def log(self, message):
         """Writes a line to the log file."""
@@ -221,9 +223,9 @@ def test(
 
         static, dynamic, x0 = batch
 
-        static = static.to(device)
-        dynamic = dynamic.to(device)
-        x0 = x0.to(device) if len(x0) > 0 else None
+        static = static.to(DEVICE)
+        dynamic = dynamic.to(DEVICE)
+        x0 = x0.to(DEVICE) if len(x0) > 0 else None
 
         with torch.no_grad():
             tour_indices, _ = actor.forward(static, dynamic, x0)
@@ -259,9 +261,9 @@ def validate(
 
         static, dynamic, x0 = batch
 
-        static = static.to(device)
-        dynamic = dynamic.to(device)
-        x0 = x0.to(device) if len(x0) > 0 else None
+        static = static.to(DEVICE)
+        dynamic = dynamic.to(DEVICE)
+        x0 = x0.to(DEVICE) if len(x0) > 0 else None
 
         with torch.no_grad():
             tour_indices, _ = actor.forward(static, dynamic, x0)
@@ -323,9 +325,9 @@ def train(
 
             static, dynamic, x0 = batch
 
-            static = static.to(device)
-            dynamic = dynamic.to(device)
-            x0 = x0.to(device) if len(x0) > 0 else None
+            static = static.to(DEVICE)
+            dynamic = dynamic.to(DEVICE)
+            x0 = x0.to(DEVICE) if len(x0) > 0 else None
 
             # Full forward pass through the dataset
             tour_indices, tour_logp = actor(static, dynamic, x0)
@@ -436,7 +438,7 @@ def main_tsp(args, run_io):
         args.num_nodes, args.valid_size, args.seed + 1, args.proportions
     )
 
-    # creating models
+    # creating models on cpu
     actor = DRL4TSP(
         STATIC_SIZE,
         TSP_DYNAMIC_SIZE,
@@ -445,16 +447,28 @@ def main_tsp(args, run_io):
         train_data.update_mask,
         args.num_layers,
         args.dropout,
-    ).to(DEVICE)
+    )
 
     critic = StateCritic(
         STATIC_SIZE, TSP_DYNAMIC_SIZE, args.hidden_size
-    ).to(DEVICE)
+    )
 
-    # load models if necessary
-    if run_io.load:
-        actor.load_state_dict(torch.load(run.actor_path))
-        critic.load_state_dict(torch.load(run.critic_path))
+    # load models to cpu if necessary
+    if args.load:
+
+        saved_actor_state_dict = torch.load(
+            run_io.actor_path, map_location=torch.device("cpu")
+        )
+        actor.load_state_dict(saved_actor_state_dict)
+
+        saved_critic_state_dict = torch.load(
+            run_io.critic_path, map_location=torch.device("cpu")
+        )
+        critic.load_state_dict(saved_critic_state_dict)
+    
+    # sending to proper device
+    actor.to(DEVICE)
+    critic.to(DEVICE)
 
     # supplement arguments
     kwargs = vars(args)
@@ -465,7 +479,7 @@ def main_tsp(args, run_io):
 
     if args.mode == "train":
         # train only for train mode
-        train(actor, critic, run=run, **kwargs)
+        train(actor, critic, run_io=run_io, **kwargs)
     elif args.mode == "test":
         # test only for test mode 
         
@@ -487,15 +501,24 @@ def main_tsp(args, run_io):
                 tsp.reward,
                 tsp.render,
                 num_plot=5,
-                logger=logger
+                run_io=run_io
             )
-            logger.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
+            run_io.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
     elif args.mode == "all":
         raise NotImplementedError("args.mode == all is not yet supported.")
     
 
 
 def main_vrp(args, run_io):
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
+    # this function has not been refactored
     # this function has not been refactored
 
     # Goals from paper:
@@ -524,9 +547,9 @@ def main_vrp(args, run_io):
         train_data.update_mask,
         args.num_layers,
         args.dropout,
-    ).to(device)
+    ).to(DEVICE)
 
-    critic = StateCritic(STATIC_SIZE, VRP_DYNAMIC_SIZE, args.hidden_size).to(device)
+    critic = StateCritic(STATIC_SIZE, VRP_DYNAMIC_SIZE, args.hidden_size).to(DEVICE)
 
     kwargs = vars(args)
     kwargs["train_data"] = train_data
@@ -536,10 +559,10 @@ def main_vrp(args, run_io):
 
     if args.checkpoint:
         path = os.path.join(args.checkpoint, "actor.pt")
-        actor.load_state_dict(torch.load(path, device))
+        actor.load_state_dict(torch.load(path, DEVICE))
 
         path = os.path.join(args.checkpoint, "critic.pt")
-        critic.load_state_dict(torch.load(path, device))
+        critic.load_state_dict(torch.load(path, DEVICE))
 
     if not args.test:
         train(actor, critic, **kwargs)
@@ -555,6 +578,19 @@ def main_vrp(args, run_io):
     print("Average tour length: ", out)
 
 
+
+def main(args, run_io):
+    """Main method for script."""
+    if args.task == "tsp":
+        main_tsp(args, run_io)
+    elif args.task == "vrp":
+        main_vrp(args, run_io)
+    else:
+        print("ERROR: Something has gone horribly wrong.")
+        sys.exit(-1)
+
+
+
 if __name__ == "__main__":
     # parsing args
     args = parse_arguments()
@@ -567,16 +603,14 @@ if __name__ == "__main__":
     if DEBUG:
         args.train_size = 10
         args.valid_size = 10
+        args.batch_size = 2
 
     # setting up current runIO
-    curr_run_io = RunIO(args.task, args.nodes, args.run_name, args.load)
+    curr_run_io = RunIO(args.task, args.num_nodes, args.run_name, args.load)
 
     if DEVICE == "cuda":
         with torch.cuda.device(args.device_id):
-            if args.task == "tsp":
-                main_tsp(args, run_io)
-            elif args.task == "vrp":
-                main_vrp(args, run_io)
-            else:
-                print("ERROR: Something has gone horribly wrong.")
-                sys.exit(-1)
+            main(args, curr_run_io)
+    else:
+        main(args, curr_run_io)
+
