@@ -7,19 +7,23 @@ The VRP is defined by the following traits:
 """
 
 import os
+
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from torch.autograd import Variable
-import matplotlib
+from torch.utils.data import Dataset
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+# matplotlib.use("Agg")
 
 # NOTE: THIS FILE HAS NOT BEEN REFACTORED WITH NODE_DISTRIB OR CURRICULUMS
 
+
 class VehicleRoutingDataset(Dataset):
-    def __init__(self, num_samples, input_size, max_load=20, max_demand=9, seed=None):
+    def __init__(
+        self, num_samples, input_size, max_load=20, max_demand=9, seed=None
+    ):
         super(VehicleRoutingDataset, self).__init__()
 
         if max_load < max_demand:
@@ -60,6 +64,7 @@ class VehicleRoutingDataset(Dataset):
         # (static, dynamic, start_loc)
         return (self.static[idx], self.dynamic[idx], self.static[idx, :, 0:1])
 
+
 def update_dynamic(dynamic, chosen_idx):
     """Updates the (load, demand) dataset values."""
 
@@ -85,9 +90,9 @@ def update_dynamic(dynamic, chosen_idx):
         visit_idx = visit.nonzero().squeeze()
 
         all_loads[visit_idx] = new_load[visit_idx]
-        all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(
-            -1
-        )
+        all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[
+            visit_idx
+        ].view(-1)
         all_demands[visit_idx, 0] = -1.0 + new_load[visit_idx].view(-1)
 
     # Return to depot to fill vehicle load
@@ -97,6 +102,7 @@ def update_dynamic(dynamic, chosen_idx):
 
     tensor = torch.cat((all_loads.unsqueeze(1), all_demands.unsqueeze(1)), 1)
     return torch.tensor(tensor.data, device=dynamic.device)
+
 
 def update_mask(mask, dynamic, chosen_idx=None):
     """Updates the mask used to hide non-valid states.
@@ -166,7 +172,9 @@ def render(static, tour_indices, save_path):
 
     num_plots = 3 if int(np.sqrt(len(tour_indices))) >= 3 else 1
 
-    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots, sharex="col", sharey="row")
+    _, axes = plt.subplots(
+        nrows=num_plots, ncols=num_plots, sharex="col", sharey="row"
+    )
 
     if num_plots == 1:
         axes = [[axes]]

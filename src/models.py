@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from constants import DEVICE
 
 
@@ -93,7 +92,9 @@ class Attention(nn.Module):
 
         self.W = nn.Parameter(
             torch.zeros(
-                (1, hidden_size, 3 * hidden_size), device=DEVICE, requires_grad=True
+                (1, hidden_size, 3 * hidden_size),
+                device=DEVICE,
+                requires_grad=True,
             )
         )
 
@@ -129,7 +130,9 @@ class Pointer(nn.Module):
 
         self.W = nn.Parameter(
             torch.zeros(
-                (1, hidden_size, 2 * hidden_size), device=DEVICE, requires_grad=True
+                (1, hidden_size, 2 * hidden_size),
+                device=DEVICE,
+                requires_grad=True,
             )
         )
 
@@ -159,11 +162,15 @@ class Pointer(nn.Module):
 
         # Given a summary of the output, find an  input context
         enc_attn = self.encoder_attn(static_hidden, dynamic_hidden, rnn_out)
-        context = enc_attn.bmm(static_hidden.permute(0, 2, 1))  # (B, 1, num_feats)
+        context = enc_attn.bmm(
+            static_hidden.permute(0, 2, 1)
+        )  # (B, 1, num_feats)
 
         # Calculate the next output using Batch-matrix-multiply ops
         context = context.transpose(1, 2).expand_as(static_hidden)
-        energy = torch.cat((static_hidden, context), dim=1)  # (B, num_feats, seq_len)
+        energy = torch.cat(
+            (static_hidden, context), dim=1
+        )  # (B, num_feats, seq_len)
 
         v = self.v.expand(static_hidden.size(0), -1, -1)
         W = self.W.expand(static_hidden.size(0), -1, -1)
@@ -236,7 +243,9 @@ class DRL4TSP(nn.Module):
                 nn.init.xavier_uniform_(p)
 
         # Used as a proxy initial state in the decoder when not specified
-        self.x0 = torch.zeros((1, static_size, 1), requires_grad=True, device=DEVICE)
+        self.x0 = torch.zeros(
+            (1, static_size, 1), requires_grad=True, device=DEVICE
+        )
 
     def forward(self, static, dynamic, decoder_input=None, last_hh=None):
         """
@@ -296,7 +305,11 @@ class DRL4TSP(nn.Module):
                 # Sometimes an issue with Categorical & sampling on GPU; See:
                 # https://github.com/pemami4911/neural-combinatorial-rl-pytorch/issues/5
                 ptr = m.sample()
-                while not torch.gather(mask, 1, ptr.data.unsqueeze(1)).byte().all():
+                while (
+                    not torch.gather(mask, 1, ptr.data.unsqueeze(1))
+                    .byte()
+                    .all()
+                ):
                     ptr = m.sample()
                 logp = m.log_prob(ptr)
             else:

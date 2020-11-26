@@ -1,9 +1,9 @@
 """Utilities wrapping google OR tools for tsp."""
 
 import math
+
 import torch
-from ortools.constraint_solver import routing_enums_pb2
-from ortools.constraint_solver import pywrapcp
+from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 
 def create_data_model(locs, factor):
@@ -37,7 +37,8 @@ def get_route_distance(data, manager, routing, solution):
         previous_node = manager.IndexToNode(previous_index)
         node = manager.IndexToNode(index)
         route_distance += (
-            data["distance_matrix"][previous_node][node].item() / data["factor"]
+            data["distance_matrix"][previous_node][node].item()
+            / data["factor"]
         )
     return route_distance
 
@@ -78,7 +79,9 @@ def get_or_tsp(locs, timeout):
         dimension_name,
     )
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
-    distance_dimension.SetGlobalSpanCostCoefficient(100)  # not sure what this does
+    distance_dimension.SetGlobalSpanCostCoefficient(
+        100
+    )  # not sure what this does
 
     # Setting guided local search heuristic
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
