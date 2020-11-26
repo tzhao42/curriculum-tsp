@@ -12,12 +12,13 @@ __getitem__, which gets processed in trainer.py to be None
 import os
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from torch.utils.data import Dataset
+
+
+matplotlib.use("Agg")
 
 class TSPDataset(Dataset):
     def __init__(

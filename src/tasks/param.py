@@ -1,9 +1,9 @@
-"""Parameterization for collection of points on [0,1]x[0,1] square."""
+"""Parameterization for distributions of nodes on [0,1]x[0,1] and utils."""
 
 import math
 import torch
 
-def gen_param_points(num_nodes, num_samples, seed, num_tiles, distrib):
+def get_param_nodes(num_nodes, num_samples, seed, num_tiles, distrib):
     """Create collection of points distributed according to parameters.
 
     Performance notes: 1) We can usually assume that num_tiles is somewhat
@@ -39,6 +39,10 @@ def gen_param_points(num_nodes, num_samples, seed, num_tiles, distrib):
     # setting seeds
     torch.manual_seed(seed)
 
+    # some utility lists
+    nonzero_indices = [i for i in range(len(distrib)) if distrib[i] > 0]
+    nonzero_vals = [distrib[i].item() for i in nonzero_indices]
+
     # offests (where in the tile each node is located)
     offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
 
@@ -51,12 +55,12 @@ def gen_param_points(num_nodes, num_samples, seed, num_tiles, distrib):
             tile_seed = tile_seeds[i, j]
 
             # generate a point
-            tiles[i, 0, j], tiles[i, 1, j] = _get_tile(tile_seed, num_tiles, distrib)
+            tiles[i, 0, j], tiles[i, 1, j] = _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals)
 
     return tiles + offsets
 
 
-def _get_tile(tile_seed, num_tiles, distrib):
+def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):
     """Create on point from the seed distribution.
 
     Assumes parameters have been checked. Note that the element at the zeroth
@@ -81,15 +85,13 @@ def _get_tile(tile_seed, num_tiles, distrib):
             uniformly in [0,1))
         num_tiles (int): number of tiles per side (for a total number of
             num_tiles^2 tiles in the parameterization)
-        distrib (torch.Tensor): parameter describing distribution of data
+        nonzero_indices (List[int]): indices of distrib that have nonzero value
+        nonzero_vals (List[float]): values at nonzero indices of distrib
 
     Returns:
         a tuple (x,y) representing the bottom left corner of the node
             specified node seed
     """
-    nonzero_indices = [i for i in range(len(distrib)) if distrib[i] > 0]
-    nonzero_vals = [distrib[i].item() for i in nonzero_indices]
-
     # getting tile index
     cum_sum = 0
     tile_index = -1
@@ -105,3 +107,93 @@ def _get_tile(tile_seed, num_tiles, distrib):
 
     return x_pos, y_pos
     
+
+
+# spencer add your things here
+
+def get_uniform_param(num_tiles):
+    """Return distrib value that corresponds to uniform distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+    
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements 
+            which sum to 1
+    """
+    param = torch.ones((num_tiles ** 2,))
+    return param / param.sum()
+
+def get_line_param(slope, intercept, num_tiles):
+    """Return distrib value that roughly corresponds to a line.
+
+    Args:
+        slope (float): slope of line
+        intercept (float): intercept of line
+        num_tiles (int): number of tiles per side of unit square
+    
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements 
+            which sum to 1
+    """
+    pass
+
+def get_crossing_lines_param(slope_1, intercept_1, slope_2, intercept_2, num_tiles):
+    """Return distrib value that roughly corresponds to two crossing lines.
+
+    Args:
+        slope_1 (float): slope of line 1
+        intercept_1 (float): intercept of line 1
+        slope_2 (float): slope of line 2
+        intercept_2 (float): intercept of line 2
+        num_tiles (int): number of tiles per side of unit square
+    
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements 
+            which sum to 1
+    """
+    pass
+
+def get_circle_param(center, radius, num_tiles):
+    """Return distrib value that roughly corresponds to a line.
+
+    Args:
+        center (Tuple[float]): center of the circle (specified as (x,y))
+        radius (float): radius of the circle
+        num_tiles (int): number of tiles per side of unit square
+    
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements 
+            which sum to 1
+    """
+    pass
+
+
+if __name__ == "__main__":
+    # debugging
+    debugging_get_param_nodes = False
+    debugging_get_uniform_param = False
+
+    if debugging_get_uniform_param:
+        c_p = get_uniform_param(8)
+        print(c_p)
+        print(c_p.sum())
+
+    if debugging_get_param_nodes:
+        c_num_nodes = 20
+        c_num_samples = 10000
+        c_seed = 12345
+        c_num_tiles = 8
+        c_distrib = torch.tensor([1] + [0 for i in range(63)])
+
+
+        import time
+        start = time.time()
+
+        nodes = get_param_nodes(c_num_nodes, c_num_samples, c_seed, c_num_tiles, c_distrib)
+
+        end = time.time()
+        print(nodes)
+        print()
+        print(end - start)
+
