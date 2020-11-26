@@ -20,6 +20,7 @@ from torch.utils.data import Dataset
 
 matplotlib.use("Agg")
 
+
 class TSPDataset(Dataset):
     def __init__(
         self, size=50, num_samples=1e6, seed=None, proportions=[1.0, 0.0, 0.0]
