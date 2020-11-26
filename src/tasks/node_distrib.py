@@ -63,64 +63,7 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     return tiles + offsets
 
 
-def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):
-    """Create on point from the seed distribution.
-
-    Assumes parameters have been checked. Note that the element at the zeroth
-    index of param indicates the probability that the tile selected is the
-    top left tile. Example arrangement for num_tiles = 4:
-
-    -----------------
-    | 0 | 1 | 2 | 3 |
-    -----------------
-    | 4 | 5 | 6 | 7 |
-    -----------------
-    | 8 | 9 | 10| 11|
-    -----------------
-    | 12| 13| 14| 15|
-    -----------------
-
-    This can probably be done in torch/numpy, but I'm in a hurry and will do
-    this in raw python.
-
-    Args:
-        tile_seed (int): randomly generated value of current seed (generated
-            uniformly in [0,1))
-        num_tiles (int): number of tiles per side (for a total number of
-            num_tiles^2 tiles in the parameterization)
-        nonzero_indices (List[int]): indices of param that have nonzero value
-        nonzero_vals (List[float]): values at nonzero indices of param
-
-    Returns:
-        a tuple (x,y) representing the bottom left corner of the node
-            specified node seed
-    """
-    # getting tile index
-    cum_sum = 0
-    tile_index = -1
-    for i in range(len(nonzero_vals)):
-        cum_sum += nonzero_vals[i]
-        if tile_seed <= cum_sum:
-            tile_index = nonzero_indices[i]
-            break
-
-    # getting coordinates of bottom left corner of tile
-    x_pos = (tile_index % num_tiles) * (1 / num_tiles)
-    y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (1 / num_tiles)
-
-    return x_pos, y_pos
-
-
-def _set_tile_val(row, col, param, val, num_tiles=None):
-    """Helper function."""
-    if num_tiles == None:
-        num_tiles = int(math.sqrt(len(param)))
-    param[row * num_tiles + col] = val
-
-
-def _normalize_param(param):
-    """Helper function."""
-    param /= param.sum()
+# param generating functions
 
 
 def get_uniform_param(num_tiles):
@@ -382,6 +325,70 @@ def get_tiny_quad_param(num_tiles, width=None):
             _set_tile_val(num_tiles - 1 - i, num_tiles - 1 - j, param, 1)
     _normalize_param(param)
     return param
+
+
+# helper functions
+
+
+def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):
+    """Create on point from the seed distribution.
+
+    Assumes parameters have been checked. Note that the element at the zeroth
+    index of param indicates the probability that the tile selected is the
+    top left tile. Example arrangement for num_tiles = 4:
+
+    -----------------
+    | 0 | 1 | 2 | 3 |
+    -----------------
+    | 4 | 5 | 6 | 7 |
+    -----------------
+    | 8 | 9 | 10| 11|
+    -----------------
+    | 12| 13| 14| 15|
+    -----------------
+
+    Args:
+        tile_seed (int): randomly generated value of current seed (generated
+            uniformly in [0,1))
+        num_tiles (int): number of tiles per side (for a total number of
+            num_tiles^2 tiles in the parameterization)
+        nonzero_indices (List[int]): indices of param that have nonzero value
+        nonzero_vals (List[float]): values at nonzero indices of param
+
+    Returns:
+        a tuple (x,y) representing the bottom left corner of the node
+            specified node seed
+    """
+    # This can probably be done in torch/numpy, but I'm in a hurry and will do 
+    # this in raw python.
+
+
+    # getting tile index
+    cum_sum = 0
+    tile_index = -1
+    for i in range(len(nonzero_vals)):
+        cum_sum += nonzero_vals[i]
+        if tile_seed <= cum_sum:
+            tile_index = nonzero_indices[i]
+            break
+
+    # getting coordinates of bottom left corner of tile
+    x_pos = (tile_index % num_tiles) * (1 / num_tiles)
+    y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (1 / num_tiles)
+
+    return x_pos, y_pos
+
+
+def _set_tile_val(row, col, param, val, num_tiles=None):
+    """Helper function."""
+    if num_tiles == None:
+        num_tiles = int(math.sqrt(len(param)))
+    param[row * num_tiles + col] = val
+
+
+def _normalize_param(param):
+    """Helper function."""
+    param /= param.sum()
 
 
 # debug functions

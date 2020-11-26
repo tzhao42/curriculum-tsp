@@ -23,7 +23,7 @@ from constants import (
     LOG_DIR,
     DEVICE,
     DEBUG,
-    N_TILES,
+    NUM_TILES,
     ORTOOLS_TSP_TIMEOUT,
     STATIC_SIZE,
     TSP_DYNAMIC_SIZE,
@@ -31,20 +31,24 @@ from constants import (
     VRP_MAX_DEMAND,
     VRP_DYNAMIC_SIZE,
 )
+
+from curriculums import (
+    get_uniform_curriculum
+)
+
 from models import DRL4TSP, Encoder, StateCritic
 
-from tasks import tsp, vrp
-from tasks.tsp import TSPDataset
-from tasks.vrp import VehicleRoutingDataset
+from tasks import tsp, vrp, node_distrib
+from tasks.tsp import TSPCurriculum, TSPDataset, update_mask
+from tasks.vrp import VehicleRoutingDataset, update_mask, update_dynamic
+from tasks.node_distrib import (
+    get_uniform_param,
+    get_up_line_param,
+    get_down_line_param,
+)
 
 from utils import tsp_or_tools
 from utils.tsp_or_tools import get_batched_or_tsp
-
-
-def set_debug(val):
-    """Set debug flag to value specified in val."""
-    global DEBUG
-    DEBUG = val
 
 
 def parse_arguments():
@@ -63,10 +67,9 @@ def parse_arguments():
     # current task/dataset
     parser.add_argument("--task", default="tsp")
     parser.add_argument("--train-size", default=1000000, type=int)
-    parser.add_argument("--valid-size", default=1000, type=int)
+    parser.add_argument("--val-size", default=1000, type=int)
     parser.add_argument("--num-nodes", default=20, type=int)
-    # parser.add_argument("--proportions", nargs=3, default=None, type=float)
-    # parser.add_argument("--data_distrib", nargs=3, default=None, type=float)
+    # parser.add_argument("--curriculum", default=1, type=int)
 
     # model params
     parser.add_argument("--hidden-size", default=128, type=int)
@@ -78,6 +81,7 @@ def parse_arguments():
     parser.add_argument("--critic-lr", default=5e-4, type=float)
     parser.add_argument("--max-grad-norm", default=2.0, type=float)
     parser.add_argument("--batch-size", default=256, type=int)
+    parser.add_argument("--epochs", default=20, type=int)
 
     # debug flag: short circuits training cycle
     parser.add_argument("--debug", dest="debug", default=False, action="store_true")
@@ -102,7 +106,7 @@ def check_args_valid(args):
         assert args.num_nodes == int(load_nodes)
     assert args.task in {"tsp", "vrp"}
     assert isinstance(args.train_size, int)
-    assert isinstance(args.valid_size, int)
+    assert isinstance(args.val_size, int)
     assert isinstance(args.num_nodes, int)
     assert isinstance(args.hidden_size, int)
     assert isinstance(args.dropout, float)
@@ -111,6 +115,7 @@ def check_args_valid(args):
     assert isinstance(args.critic_lr, float)
     assert isinstance(args.max_grad_norm, float)
     assert isinstance(args.batch_size, int)
+    assert isinstance(args.epochs, int)
     assert isinstance(args.debug, bool)
 
 
@@ -204,12 +209,16 @@ class RunIO:
         return parentdir
 
 
-def test(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None):
-    """Compare performance of model and google OR tools"""
+def test_tsp(
+    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
+):
+    """Compare performance of model and google OR tools."""
 
     actor.eval()
 
-    optimality_gaps = []
+    cum_tour_length = 0
+    cum_opt_gap = 0
+
     for batch_idx, batch in enumerate(data_loader):
 
         static, dynamic, x0 = batch
@@ -225,27 +234,32 @@ def test(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None)
         model_tour_lengths = reward_fn(static, tour_indices)
         optimal_tour_lengths = get_batched_or_tsp(static, ORTOOLS_TSP_TIMEOUT)
         curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
-        mean_opt_gap = curr_opt_gaps.mean().item()
-        optimality_gaps.append(mean_opt_gap)
 
+        # increment cumulative values
+        cum_tour_length += model_tour_lengths.cpu().sum().item()
+        cum_opt_gap += curr_opt_gaps.sum().item()
+
+        mean_opt_gap = curr_opt_gaps.mean().item()
         if render_fn is not None and batch_idx < num_plot:
             name = "batch%d_%2.4f.png" % (batch_idx, mean_opt_gap)
             path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
+    
+    avg_tour_length = cum_tour_length / len(data_loader)
+    avg_opt_gap = cum_opt_gap / len(data_loader)
 
-        if DEBUG:
-            break
-
-    actor.train()
-    return np.mean(optimality_gaps)
+    return avg_tour_length, avg_opt_gap
 
 
-def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None):
-    """Used to monitor progress on a validation set & optionally plot solution."""
+def validate(
+    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
+):
+    """Used to monitor progress on a validation set & optionally plot."""
 
     actor.eval()
 
-    rewards = []
+    cum_reward = 0
+
     for batch_idx, batch in enumerate(data_loader):
 
         static, dynamic, x0 = batch
@@ -257,41 +271,125 @@ def validate(data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=N
         with torch.no_grad():
             tour_indices, _ = actor.forward(static, dynamic, x0)
 
-        reward = reward_fn(static, tour_indices).mean().item()
-        rewards.append(reward)
+        reward_tensor = reward_fn(static, tour_indices)
+        reward = reward_tensor.cpu().mean().item()
+        cum_reward += reward_tensor.cpu().sum().item()
 
         if render_fn is not None and batch_idx < num_plot:
             name = "batch%d_%2.4f.png" % (batch_idx, reward)
             path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
 
-        if DEBUG:
-            break
+    avg_reward = cum_reward / len(data_loader)
 
-    actor.train()
-    return np.mean(rewards)
+    return avg_reward
 
 
-def train(
+def train_single_epoch(
     actor,
     critic,
-    task,
-    num_nodes,
-    train_data,
-    valid_data,
+    train_loader,
+    reward_fn,
+    actor_opt,
+    critic_opt,
+    max_grad_norm,
+    epoch,
+    run_io
+):
+    actor.train()
+    critic.train()
+
+    # Not sure why critic_rewards is being kept track of, but we'll keep that 
+    # the same for the time being
+    times, losses, rewards, critic_rewards = [], [], [], []
+
+    start = time.time()
+
+    for batch_idx, batch in enumerate(train_loader):
+
+        # getting batch
+        static, dynamic, x0 = batch
+
+        # sending batch to device
+        static = static.to(DEVICE)
+        dynamic = dynamic.to(DEVICE)
+        x0 = x0.to(DEVICE) if len(x0) > 0 else None
+
+        # Full forward pass through the dataset
+        tour_indices, tour_logp = actor(static, dynamic, x0)
+
+        # Sum the log probabilities for each city in the tour
+        reward = reward_fn(static, tour_indices)
+
+        # Query the critic for an estimate of the reward
+        critic_est = critic(static, dynamic).view(-1)
+
+        # Loss for each model
+        advantage = reward - critic_est
+        actor_loss = torch.mean(advantage.detach() * tour_logp.sum(dim=1))
+        critic_loss = torch.mean(advantage ** 2)
+
+        # optimize actor
+        actor_opt.zero_grad()
+        actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(actor.parameters(), max_grad_norm)
+        actor_opt.step()
+
+        # optimize critic
+        critic_opt.zero_grad()
+        critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(critic.parameters(), max_grad_norm)
+        critic_opt.step()
+
+        # keeping track of values for logging
+        critic_rewards.append(torch.mean(critic_est.detach()).item())
+        rewards.append(torch.mean(reward.detach()).item())
+        losses.append(torch.mean(actor_loss.detach()).item())
+
+        # Logging training progress
+        if batch_idx % 100 == 0:
+            end = time.time()
+            times.append(end - start)
+            start = end
+
+            mean_loss = np.mean(losses[-100:])
+            mean_reward = np.mean(rewards[-100:])
+
+            run_io.log(
+                "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
+                % (
+                    epoch,
+                    batch_idx,
+                    len(train_loader),
+                    mean_reward,
+                    mean_loss,
+                    times[-1],
+                )
+            )
+    
+    return times, losses, rewards
+
+
+
+def train_curriculum(
+    actor,
+    critic,
+    curriculum,
+    val_data,
     reward_fn,
     render_fn,
+    epochs,
     batch_size,
     actor_lr,
     critic_lr,
     max_grad_norm,
-    run_io=None,
-    **kwargs,
+    run_io,
 ):
     """Constructs the main actor & critic networks, and performs training."""
-    # dataloaders
-    train_loader = DataLoader(train_data, batch_size, shuffle=True, num_workers=0)
-    valid_loader = DataLoader(valid_data, batch_size, shuffle=False, num_workers=0)
+    # validation data
+    val_loader = DataLoader(
+        val_data, batch_size, shuffle=False, num_workers=0
+    )
 
     # optimizers
     actor_optim = optim.Adam(actor.parameters(), lr=actor_lr)
@@ -300,91 +398,44 @@ def train(
     best_params = None
     best_reward = np.inf
 
-    for epoch in range(20):
-
-        actor.train()
-        critic.train()
-
-        times, losses, rewards, critic_rewards = [], [], [], []
-
+    for epoch in range(epochs):
+        # keeping track of start time
         epoch_start = time.time()
-        start = epoch_start
 
-        for batch_idx, batch in enumerate(train_loader):
+        # get current train loader
+        curr_train_data = curriculum.get_dataset()
+        curr_train_loader = DataLoader(
+            curr_train_data, batch_size, shuffle=True, num_workers=0
+        )
 
-            static, dynamic, x0 = batch
-
-            static = static.to(DEVICE)
-            dynamic = dynamic.to(DEVICE)
-            x0 = x0.to(DEVICE) if len(x0) > 0 else None
-
-            # Full forward pass through the dataset
-            tour_indices, tour_logp = actor(static, dynamic, x0)
-
-            # Sum the log probabilities for each city in the tour
-            reward = reward_fn(static, tour_indices)
-
-            # Query the critic for an estimate of the reward
-            critic_est = critic(static, dynamic).view(-1)
-
-            advantage = reward - critic_est
-            actor_loss = torch.mean(advantage.detach() * tour_logp.sum(dim=1))
-            critic_loss = torch.mean(advantage ** 2)
-
-            actor_optim.zero_grad()
-            actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(actor.parameters(), max_grad_norm)
-            actor_optim.step()
-
-            critic_optim.zero_grad()
-            critic_loss.backward()
-            torch.nn.utils.clip_grad_norm_(critic.parameters(), max_grad_norm)
-            critic_optim.step()
-
-            critic_rewards.append(torch.mean(critic_est.detach()).item())
-            rewards.append(torch.mean(reward.detach()).item())
-            losses.append(torch.mean(actor_loss.detach()).item())
-
-            # Logging training progress
-            if batch_idx % 100 == 0:
-                end = time.time()
-                times.append(end - start)
-                start = end
-
-                mean_loss = np.mean(losses[-100:])
-                mean_reward = np.mean(rewards[-100:])
-
-                run_io.log(
-                    "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
-                    % (
-                        epoch,
-                        batch_idx,
-                        len(train_loader),
-                        mean_reward,
-                        mean_loss,
-                        times[-1],
-                    )
-                )
-
-            if DEBUG:
-                break
+        # training for an epoch
+        times, losses, rewards = train_single_epoch(
+            actor,
+            critic,
+            curr_train_loader,
+            reward_fn,
+            actor_optim, 
+            critic_optim,
+            max_grad_norm,
+            epoch,
+            run_io
+        )
 
         # Save models for checkpointing
         epoch_dir = os.path.join(run_io.checkpoint_dir, f"epoch-{epoch}")
         if not os.path.exists(epoch_dir):
             os.makedirs(epoch_dir)
-
         torch.save(actor.state_dict(), os.path.join(epoch_dir, "actor.pt"))
         torch.save(critic.state_dict(), os.path.join(epoch_dir, "critic.pt"))
 
-        # Save rendering of validation set tours
-        mean_valid = validate(
-            valid_loader, actor, reward_fn, render_fn, num_plot=5, run_io=run_io
+        # run validation
+        mean_val_reward = validate(
+            val_loader, actor, reward_fn, render_fn, num_plot=5, run_io=run_io
         )
 
         # Save best models
-        if mean_valid < best_reward:
-            best_reward = mean_valid
+        if mean_val_reward < best_reward:
+            best_reward = mean_val_reward
             torch.save(actor.state_dict(), run_io.actor_path)
             torch.save(critic.state_dict(), run_io.critic_path)
 
@@ -393,33 +444,35 @@ def train(
         mean_reward = np.mean(rewards)
 
         run_io.log(
-            "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
-            "(%2.4fs / 100 batches)\n\n"
+            "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, "
+            "took: %2.4fs (%2.4fs / 100 batches)\n\n"
             % (
                 epoch,
                 mean_loss,
                 mean_reward,
-                mean_valid,
+                mean_val_reward,
                 time.time() - epoch_start,
                 np.mean(times),
             )
         )
 
-        if DEBUG:
-            break
+        # increment epoch in curriculum
+        curriculum.increment_epoch()
+
 
 
 def main_tsp(args, run_io):
     """Main method for training/testing model for tsp task."""
-    # checking if debug
-
-    # creating datasets
-    train_data = TSPDataset(
-        args.num_nodes, args.train_size, args.seed, args.proportions
+    # creating curriculum
+    curriculum = get_uniform_curriculum(
+        args.epochs, args.num_nodes, args.train_size, args.seed
     )
 
-    valid_data = TSPDataset(
-        args.num_nodes, args.valid_size, args.seed + 1, args.proportions
+    # creating datasets
+    # we validate and test on uniform distribution
+    unif_param = get_up_line_param(NUM_TILES)
+    val_data = TSPDataset(
+        args.num_nodes, args.val_size, args.seed+1, NUM_TILES, param=unif_param
     )
 
     # creating models on cpu
@@ -427,8 +480,8 @@ def main_tsp(args, run_io):
         STATIC_SIZE,
         TSP_DYNAMIC_SIZE,
         args.hidden_size,
-        None,
-        train_data.update_mask,
+        None, # update dynamic is None
+        tsp.update_mask,
         args.num_layers,
         args.dropout,
     )
@@ -437,7 +490,6 @@ def main_tsp(args, run_io):
 
     # load models to cpu if necessary
     if args.load:
-
         saved_actor_state_dict = torch.load(
             run_io.actor_path, map_location=torch.device("cpu")
         )
@@ -452,37 +504,41 @@ def main_tsp(args, run_io):
     actor.to(DEVICE)
     critic.to(DEVICE)
 
-    # supplement arguments
-    kwargs = vars(args)
-    kwargs["train_data"] = train_data
-    kwargs["valid_data"] = valid_data
-    kwargs["reward_fn"] = tsp.reward
-    kwargs["render_fn"] = tsp.render
-
     if args.mode == "train":
         # train only for train mode
-        train(actor, critic, run_io=run_io, **kwargs)
+        train_curriculum(
+            actor,
+            critic,
+            curriculum,
+            val_data,
+            tsp.reward,
+            tsp.render,
+            args.epochs,
+            args.batch_size,
+            args.actor_lr,
+            args.critic_lr,
+            args.max_grad_norm,
+            run_io
+        )
     elif args.mode == "test":
         # test only for test mode
+        # refactor to be better
+        test_loader = DataLoader(
+            val_data, args.batch_size, shuffle=False, num_workers=0
+        )
+        avg_tour_length, avg_opt_gap = test_tsp(
+            test_loader,
+            actor,
+            tsp.reward,
+            tsp.render,
+            5,
+            run_io
+        )
 
-        # currently this a hacky thing
-        test_proportions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-        test_names = ["uniform", "shifted", "adversary"]
+        # logging results of test
+        run_io.log(f"Average tour length: {avg_tour_length}\n")
+        run_io.log(f"Average optimality gap: {avg_opt_gap}\n")
 
-        for test_id in range(0, 3):
-            test_data = TSPDataset(
-                args.num_nodes,
-                1000,
-                args.seed + 2,
-                proportions=test_proportions[test_id],
-            )
-            test_loader = DataLoader(
-                test_data, args.batch_size, shuffle=False, num_workers=0
-            )
-            out = test(
-                test_loader, actor, tsp.reward, tsp.render, num_plot=5, run_io=run_io
-            )
-            run_io.log(f"Average optimality gap for {test_names[test_id]}: {out}\n")
     elif args.mode == "all":
         raise NotImplementedError("args.mode == all is not yet supported.")
 
@@ -567,6 +623,150 @@ def main(args, run_io):
         sys.exit(-1)
 
 
+
+
+
+
+# def train(
+#     actor,
+#     critic,
+#     task,
+#     num_nodes,
+#     train_data,
+#     valid_data,
+#     reward_fn,
+#     render_fn,
+#     batch_size,
+#     actor_lr,
+#     critic_lr,
+#     max_grad_norm,
+#     run_io=None,
+#     **kwargs,
+# ):
+#     """Constructs the main actor & critic networks, and performs training."""
+#     # dataloaders
+#     train_loader = DataLoader(train_data, batch_size, shuffle=True, num_workers=0)
+#     valid_loader = DataLoader(valid_data, batch_size, shuffle=False, num_workers=0)
+
+#     # optimizers
+#     actor_optim = optim.Adam(actor.parameters(), lr=actor_lr)
+#     critic_optim = optim.Adam(critic.parameters(), lr=critic_lr)
+
+#     best_params = None
+#     best_reward = np.inf
+
+#     for epoch in range(20):
+
+#         actor.train()
+#         critic.train()
+
+#         times, losses, rewards, critic_rewards = [], [], [], []
+
+#         epoch_start = time.time()
+#         start = epoch_start
+
+#         for batch_idx, batch in enumerate(train_loader):
+
+#             static, dynamic, x0 = batch
+
+#             static = static.to(DEVICE)
+#             dynamic = dynamic.to(DEVICE)
+#             x0 = x0.to(DEVICE) if len(x0) > 0 else None
+
+#             # Full forward pass through the dataset
+#             tour_indices, tour_logp = actor(static, dynamic, x0)
+
+#             # Sum the log probabilities for each city in the tour
+#             reward = reward_fn(static, tour_indices)
+
+#             # Query the critic for an estimate of the reward
+#             critic_est = critic(static, dynamic).view(-1)
+
+#             advantage = reward - critic_est
+#             actor_loss = torch.mean(advantage.detach() * tour_logp.sum(dim=1))
+#             critic_loss = torch.mean(advantage ** 2)
+
+#             actor_optim.zero_grad()
+#             actor_loss.backward()
+#             torch.nn.utils.clip_grad_norm_(actor.parameters(), max_grad_norm)
+#             actor_optim.step()
+
+#             critic_optim.zero_grad()
+#             critic_loss.backward()
+#             torch.nn.utils.clip_grad_norm_(critic.parameters(), max_grad_norm)
+#             critic_optim.step()
+
+#             critic_rewards.append(torch.mean(critic_est.detach()).item())
+#             rewards.append(torch.mean(reward.detach()).item())
+#             losses.append(torch.mean(actor_loss.detach()).item())
+
+#             # Logging training progress
+#             if batch_idx % 100 == 0:
+#                 end = time.time()
+#                 times.append(end - start)
+#                 start = end
+
+#                 mean_loss = np.mean(losses[-100:])
+#                 mean_reward = np.mean(rewards[-100:])
+
+#                 run_io.log(
+#                     "Epoch %d, Batch %d/%d, reward: %2.3f, loss: %2.4f, took: %2.4fs\n"
+#                     % (
+#                         epoch,
+#                         batch_idx,
+#                         len(train_loader),
+#                         mean_reward,
+#                         mean_loss,
+#                         times[-1],
+#                     )
+#                 )
+
+#             if DEBUG:
+#                 break
+
+#         # Save models for checkpointing
+#         epoch_dir = os.path.join(run_io.checkpoint_dir, f"epoch-{epoch}")
+#         if not os.path.exists(epoch_dir):
+#             os.makedirs(epoch_dir)
+
+#         torch.save(actor.state_dict(), os.path.join(epoch_dir, "actor.pt"))
+#         torch.save(critic.state_dict(), os.path.join(epoch_dir, "critic.pt"))
+
+#         # Save rendering of validation set tours
+#         mean_valid = validate(
+#             valid_loader, actor, reward_fn, render_fn, num_plot=5, run_io=run_io
+#         )
+
+#         # Save best models
+#         if mean_valid < best_reward:
+#             best_reward = mean_valid
+#             torch.save(actor.state_dict(), run_io.actor_path)
+#             torch.save(critic.state_dict(), run_io.critic_path)
+
+#         # Logging model evaluation
+#         mean_loss = np.mean(losses)
+#         mean_reward = np.mean(rewards)
+
+#         run_io.log(
+#             "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
+#             "(%2.4fs / 100 batches)\n\n"
+#             % (
+#                 epoch,
+#                 mean_loss,
+#                 mean_reward,
+#                 mean_valid,
+#                 time.time() - epoch_start,
+#                 np.mean(times),
+#             )
+#         )
+
+#         if DEBUG:
+#             break
+
+
+
+
+
 if __name__ == "__main__":
     # parsing args
     args = parse_arguments()
@@ -575,11 +775,13 @@ if __name__ == "__main__":
     check_args_valid(args)
 
     # taking care of debug stuff
-    set_debug(args.debug)
-    if DEBUG:
-        args.train_size = 10
-        args.valid_size = 10
+    if args.debug:
+        args.train_size = 5
+        args.val_size = 3
         args.batch_size = 2
+        args.epochs = 2
+
+        DEBUG = True
         ORTOOLS_TSP_TIMEOUT = 1
 
     # setting up current runIO

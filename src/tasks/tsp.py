@@ -17,23 +17,130 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import Dataset
 
+from . import node_distrib
+from .node_distrib import get_param_nodes
 
 matplotlib.use("Agg")
+
+class _TSPStage:
+    """Stage of curriculum for training on tsp task.
+    
+    This is a helper object to keep track of a few things.
+
+    Attributes:
+        num_tiles (int): number of tiles in this stage
+        param (torch.Tensor): parameter describing the data distribution
+        start (int): the epoch number at which this stage activates
+        length (int): the number of epochs this stage runs for
+    """
+    def __init__(self, num_tiles, param, start, length):
+        """Create TSPStage instance.
+
+        Args:
+            num_tiles (int): number of tiles in this stage
+            param (torch.Tensor): parameter describing the data distribution
+            start (int): the epoch number at which this stage activates
+            length (int): the number of epochs this stage runs for
+        """
+        self.num_tiles = num_tiles
+        self.param = param
+        self.start = start
+        self.length = length
+
+
+class TSPCurriculum:
+    """Curriculum for training on tsp task."""
+    def __init__(self, num_nodes, num_samples, seed):
+        """Create TSP curriculum.
+
+        Args:
+            num_nodes (int): number of nodes per problem instance
+            num_samples (int): number of problem instances in dataset
+            seed (int): random seed
+        """
+        self._num_nodes = num_nodes
+        self._num_samples = num_samples
+        self._seed = seed
+
+        self._stages = list()
+
+        self._curr_stage_index = None
+        self._curr_stage = None
+        self._curr_dataset = None
+
+        self._curr_epoch = -1
+        self._curr_len = 0
+
+        self._finished = False # need to figure out how to finish up
+
+
+    def increment_epoch(self):
+        """Increment the current epoch of the curriculum.
+        
+        Indicates that we have trained for an epoch.
+        """
+        self._curr_epoch += 1
+
+        if self._curr_epoch == self._curr_len:
+            # can't increment anymore
+            self._finished = True
+
+        new_stage_epoch = self._curr_stage.start + self._curr_stage.length + 1
+        if self._curr_epoch == new_stage_epoch and not self._finished:
+            # load new stage and new dataset
+            self._curr_stage_index += 1
+            self._curr_stage = self._stages[self._curr_stage_index]
+            self._curr_dataset = TSPDataset(
+                num_nodes=self._num_nodes,
+                num_samples=self._num_samples,
+                seed=self._seed,
+                num_tiles=self._curr_stage.num_tiles,
+                param=self._curr_stage.param
+            )
+
+    def get_dataset(self):
+        """Get the dataset of the current epoch."""
+        assert not self._finished
+        return self._curr_dataset
+
+    def add_stage(self, num_tiles, param, num_epochs):
+        """Add a stage to the curriculum.
+
+        Args
+            num_tiles (int): number of tiles
+            param (torch.Tensor): parameter for distribution of nodes
+            num_epochs (int): number of epochs to train on this distribution
+        """
+        curr_stage = _TSPStage(num_tiles, param, self._curr_len, num_epochs)
+        self._stages.append(curr_stage)
+        self._curr_len += num_epochs
+    
+    def start(self):
+        """Start up the curriculum after adding all stages."""
+        self._curr_epoch = 0
+        self._curr_stage_index = 0
+        self._curr_stage = self._stages[self._curr_stage_index]
+        self._curr_dataset = TSPDataset(
+            num_nodes=self._num_nodes,
+            num_samples=self._num_samples,
+            seed=self._seed,
+            num_tiles=self._curr_stage.num_tiles,
+            param=self._curr_stage.param
+        )
 
 
 class TSPDataset(Dataset):
     def __init__(
-        self, size=50, num_samples=1e6, seed=None, proportions=[1.0, 0.0, 0.0]
+        self, num_nodes=50, num_samples=1e6, seed=None, num_tiles=None, param=None
     ):
         """Create TSP dataset.
 
         Args:
-            size (int): number of nodes per problem instance
+            num_nodes (int): number of nodes per problem instance
             num_samples (int): number of problem instances in dataset
             seed (int): random seed
-            proportions (List[float]): *to be removed*
+            param (torch.Tensor): parameter for distribution of nodes
         """
-        # unit square, medium corners (0.2), small corners (0.01)
         super(TSPDataset, self).__init__()
 
         if seed is None:
@@ -41,40 +148,9 @@ class TSPDataset(Dataset):
 
         np.random.seed(seed)
         torch.manual_seed(seed)
-        self.dataset = torch.rand((num_samples, 2, size))
-        for i in range(0, num_samples):
-            rand_val = np.random.uniform(0, 1)
-            for k in range(0, size):
-                if rand_val <= proportions[0]:
-                    # uniform, do nothing
-                    pass
-                elif rand_val - proportions[0] <= proportions[1]:
-                    # medium corners
-                    top = np.random.randint(0, 2) == 0
-                    for j in range(0, 2):
-                        if top:
-                            self.dataset[i][j][k] = np.random.uniform(0, 0.2)
-                        else:
-                            self.dataset[i][j][k] = np.random.uniform(0.8, 1)
-                else:
-                    # small corners
-                    top = np.random.randint(0, 2) == 0
-                    for j in range(0, 2):
-                        if j == 0:
-                            # x cordinate
-                            if top:
-                                self.dataset[i][j][k] = np.random.uniform(1 - 0.01, 1)
-                            else:
-                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
-                        else:
-                            # y coordinate
-                            if top:
-                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
-                            else:
-                                self.dataset[i][j][k] = np.random.uniform(1 - 0.01, 1)
-
-        self.dynamic = torch.zeros(num_samples, 1, size)
-        self.num_nodes = size
+        self.dataset = get_param_nodes(num_nodes, num_samples, seed, num_tiles, param)
+        self.dynamic = torch.zeros(num_samples, 1, num_nodes)
+        self.num_nodes = num_nodes
         self.size = num_samples
 
     def __len__(self):
@@ -84,10 +160,14 @@ class TSPDataset(Dataset):
         # (static, dynamic, start_loc)
         return (self.dataset[idx], self.dynamic[idx], [])
 
-    def update_mask(self, mask, dynamic, chosen_idx):
-        """Marks the visited city, so it can't be selected a second time."""
-        mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
-        return mask
+
+
+# tsp has no update mask function (it points to None)
+
+def update_mask(mask, dynamic, chosen_idx):
+    """Marks the visited city, so it can't be selected a second time."""
+    mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
+    return mask
 
 
 def reward(static, tour_indices):

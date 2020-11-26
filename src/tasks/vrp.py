@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# NOTE: THIS FILE HAS NOT BEEN REFACTORED WITH NODE_DISTRIB OR CURRICULUMS
 
 class VehicleRoutingDataset(Dataset):
     def __init__(self, num_samples, input_size, max_load=20, max_demand=9, seed=None):
@@ -59,82 +60,82 @@ class VehicleRoutingDataset(Dataset):
         # (static, dynamic, start_loc)
         return (self.static[idx], self.dynamic[idx], self.static[idx, :, 0:1])
 
-    def update_mask(self, mask, dynamic, chosen_idx=None):
-        """Updates the mask used to hide non-valid states.
+def update_dynamic(dynamic, chosen_idx):
+    """Updates the (load, demand) dataset values."""
 
-        Parameters
-        ----------
-        dynamic: torch.autograd.Variable of size (1, num_feats, seq_len)
-        """
+    # Update the dynamic elements differently for if we visit depot vs. a city
+    visit = chosen_idx.ne(0)
+    depot = chosen_idx.eq(0)
 
-        # Convert floating point to integers for calculations
-        loads = dynamic.data[:, 0]  # (batch_size, seq_len)
-        demands = dynamic.data[:, 1]  # (batch_size, seq_len)
+    # Clone the dynamic variable so we don't mess up graph
+    all_loads = dynamic[:, 0].clone()
+    all_demands = dynamic[:, 1].clone()
 
-        # If there is no positive demand left, we can end the tour.
-        # Note that the first node is the depot, which always has a negative demand
-        if demands.eq(0).all():
-            return demands * 0.0
+    load = torch.gather(all_loads, 1, chosen_idx.unsqueeze(1))
+    demand = torch.gather(all_demands, 1, chosen_idx.unsqueeze(1))
 
-        # Otherwise, we can choose to go anywhere where demand is > 0
-        new_mask = demands.ne(0) * demands.lt(loads)
+    # Across the minibatch - if we've chosen to visit a city, try to satisfy
+    # as much demand as possible
+    if visit.any():
 
-        # We should avoid traveling to the depot back-to-back
-        repeat_home = chosen_idx.ne(0)
+        new_load = torch.clamp(load - demand, min=0)
+        new_demand = torch.clamp(demand - load, min=0)
 
-        if repeat_home.any():
-            new_mask[repeat_home.nonzero(), 0] = 1.0
-        if (1 - repeat_home).any():
-            new_mask[(1 - repeat_home).nonzero(), 0] = 0.0
+        # Broadcast the load to all nodes, but update demand seperately
+        visit_idx = visit.nonzero().squeeze()
 
-        # ... unless we're waiting for all other samples in a minibatch to finish
-        has_no_load = loads[:, 0].eq(0).float()
-        has_no_demand = demands[:, 1:].sum(1).eq(0).float()
+        all_loads[visit_idx] = new_load[visit_idx]
+        all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(
+            -1
+        )
+        all_demands[visit_idx, 0] = -1.0 + new_load[visit_idx].view(-1)
 
-        combined = (has_no_load + has_no_demand).gt(0)
-        if combined.any():
-            new_mask[combined.nonzero(), 0] = 1.0
-            new_mask[combined.nonzero(), 1:] = 0.0
+    # Return to depot to fill vehicle load
+    if depot.any():
+        all_loads[depot.nonzero().squeeze()] = 1.0
+        all_demands[depot.nonzero().squeeze(), 0] = 0.0
 
-        return new_mask.float()
+    tensor = torch.cat((all_loads.unsqueeze(1), all_demands.unsqueeze(1)), 1)
+    return torch.tensor(tensor.data, device=dynamic.device)
 
-    def update_dynamic(self, dynamic, chosen_idx):
-        """Updates the (load, demand) dataset values."""
+def update_mask(mask, dynamic, chosen_idx=None):
+    """Updates the mask used to hide non-valid states.
 
-        # Update the dynamic elements differently for if we visit depot vs. a city
-        visit = chosen_idx.ne(0)
-        depot = chosen_idx.eq(0)
+    Parameters
+    ----------
+    dynamic: torch.autograd.Variable of size (1, num_feats, seq_len)
+    """
 
-        # Clone the dynamic variable so we don't mess up graph
-        all_loads = dynamic[:, 0].clone()
-        all_demands = dynamic[:, 1].clone()
+    # Convert floating point to integers for calculations
+    loads = dynamic.data[:, 0]  # (batch_size, seq_len)
+    demands = dynamic.data[:, 1]  # (batch_size, seq_len)
 
-        load = torch.gather(all_loads, 1, chosen_idx.unsqueeze(1))
-        demand = torch.gather(all_demands, 1, chosen_idx.unsqueeze(1))
+    # If there is no positive demand left, we can end the tour.
+    # Note that the first node is the depot, which always has a negative demand
+    if demands.eq(0).all():
+        return demands * 0.0
 
-        # Across the minibatch - if we've chosen to visit a city, try to satisfy
-        # as much demand as possible
-        if visit.any():
+    # Otherwise, we can choose to go anywhere where demand is > 0
+    new_mask = demands.ne(0) * demands.lt(loads)
 
-            new_load = torch.clamp(load - demand, min=0)
-            new_demand = torch.clamp(demand - load, min=0)
+    # We should avoid traveling to the depot back-to-back
+    repeat_home = chosen_idx.ne(0)
 
-            # Broadcast the load to all nodes, but update demand seperately
-            visit_idx = visit.nonzero().squeeze()
+    if repeat_home.any():
+        new_mask[repeat_home.nonzero(), 0] = 1.0
+    if (1 - repeat_home).any():
+        new_mask[(1 - repeat_home).nonzero(), 0] = 0.0
 
-            all_loads[visit_idx] = new_load[visit_idx]
-            all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(
-                -1
-            )
-            all_demands[visit_idx, 0] = -1.0 + new_load[visit_idx].view(-1)
+    # ... unless we're waiting for all other samples in a minibatch to finish
+    has_no_load = loads[:, 0].eq(0).float()
+    has_no_demand = demands[:, 1:].sum(1).eq(0).float()
 
-        # Return to depot to fill vehicle load
-        if depot.any():
-            all_loads[depot.nonzero().squeeze()] = 1.0
-            all_demands[depot.nonzero().squeeze(), 0] = 0.0
+    combined = (has_no_load + has_no_demand).gt(0)
+    if combined.any():
+        new_mask[combined.nonzero(), 0] = 1.0
+        new_mask[combined.nonzero(), 1:] = 0.0
 
-        tensor = torch.cat((all_loads.unsqueeze(1), all_demands.unsqueeze(1)), 1)
-        return torch.tensor(tensor.data, device=dynamic.device)
+    return new_mask.float()
 
 
 def reward(static, tour_indices):
