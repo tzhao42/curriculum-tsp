@@ -9,13 +9,13 @@ from tasks.node_distrib import (
     get_down_line_param,
     get_horiz_param,
     get_medium_pair_param,
+    get_plus_param,
     get_tiny_pair_param,
     get_tiny_quad_param,
     get_uniform_param,
     get_up_line_param,
     get_vert_param,
     get_x_shape_param,
-    get_plus_param,
 )
 from tasks.tsp import TSPCurriculum
 
