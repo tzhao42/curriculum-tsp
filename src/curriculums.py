@@ -1,18 +1,7 @@
 """Various curriculum specifications."""
 
 import torch
-from constants import (
-    DEBUG,
-    DEVICE,
-    LOG_DIR,
-    NUM_TILES,
-    ORTOOLS_TSP_TIMEOUT,
-    STATIC_SIZE,
-    TSP_DYNAMIC_SIZE,
-    VRP_DYNAMIC_SIZE,
-    VRP_LOAD_DICT,
-    VRP_MAX_DEMAND,
-)
+from constants import NUM_TILES
 from tasks import node_distrib, tsp
 from tasks.node_distrib import (
     get_border_param,
@@ -26,6 +15,7 @@ from tasks.node_distrib import (
     get_up_line_param,
     get_vert_param,
     get_x_shape_param,
+    get_plus_param,
 )
 from tasks.tsp import TSPCurriculum
 
@@ -146,9 +136,10 @@ def get_curriculum_four(epochs, num_nodes, train_size, val_size, seed, debug):
     steps = [
         (get_horiz_param, 2),
         (get_vert_param, 2),
+        (get_plus_param, 2),
         (get_down_line_param, 2),
         (get_up_line_param, 2),
-        (get_x_shape_param, 4),
+        (get_x_shape_param, 2),
         (get_uniform_param, 8),
     ]
     val_param = get_uniform_param(NUM_TILES)
@@ -161,11 +152,9 @@ def get_curriculum_four(epochs, num_nodes, train_size, val_size, seed, debug):
 def get_curriculum_five(epochs, num_nodes, train_size, val_size, seed, debug):
     """Create curriculum for experiment five."""
     steps = [
-        (get_horiz_param, 2),
-        (get_vert_param, 2),
-        (get_down_line_param, 2),
-        (get_up_line_param, 2),
-        (get_x_shape_param, 4),
+        (get_down_line_param, 4),
+        (get_up_line_param, 4),
+        (get_circle_param, 4),
         (get_uniform_param, 8),
     ]
     val_param = get_uniform_param(NUM_TILES)

@@ -20,8 +20,6 @@ from torch.utils.data import Dataset
 from . import node_distrib
 from .node_distrib import get_param_nodes
 
-# matplotlib.use("Agg")
-
 
 class _TSPStage:
     """Stage of curriculum for training on tsp task.
@@ -69,7 +67,7 @@ class TSPCurriculum:
         self._seed = seed
         self._debug = debug
 
-        # training
+        # training (initialization values must be reset)
         self._stages = list()
 
         self._curr_stage_index = None
@@ -99,7 +97,7 @@ class TSPCurriculum:
             # can't increment anymore
             self._finished = True
 
-        new_stage_epoch = self._curr_stage.start + self._curr_stage.length + 1
+        new_stage_epoch = self._curr_stage.start + self._curr_stage.length
         if self._curr_epoch == new_stage_epoch and not self._finished:
             # load new stage and new dataset
             self._curr_stage_index += 1
@@ -122,7 +120,7 @@ class TSPCurriculum:
     def get_val_dataset(self):
         """Get the validation dataset."""
         if self._debug:
-            self.visualize_dataset(self._val_dataset)
+            self.visualize_dataset(self._val_dataset, val=True)
         return self._val_dataset
 
     def add_stage(self, num_tiles, param, num_epochs):
@@ -169,17 +167,23 @@ class TSPCurriculum:
             param=self._curr_stage.param,
         )
 
-    def visualize_dataset(self, tspdataset):
+    def visualize_dataset(self, tspdataset, val=False):
         """Print a visualization of current dataset."""
         x = tspdataset.dataset[:, 0, :].flatten().numpy()
         y = tspdataset.dataset[:, 1, :].flatten().numpy()
 
         plt.clf()
         plt.scatter(x, y)
-        plt.title(f"Epoch {self._curr_epoch}")
+        if val:
+            plt.title("Validation")
+        else:
+            plt.title(f"Epoch {self._curr_epoch}")
         plt.xlim(0, 1)
         plt.ylim(0, 1)
-        plt.show()
+
+        plt.draw()
+        plt.pause(2)
+        plt.close()
         plt.clf()
 
 

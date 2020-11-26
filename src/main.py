@@ -13,6 +13,7 @@ import os
 import pathlib
 import time
 
+import matplotlib
 import numpy as np
 import torch
 import torch.nn as nn
@@ -671,6 +672,9 @@ if __name__ == "__main__":
 
         DEBUG = True
         ORTOOLS_TSP_TIMEOUT = 1
+    else:
+        # debug mode uses default backend, production mode does not
+        matplotlib.use("Agg")
 
     # setting up current runIO
     curr_run_io = RunIO(args.task, args.num_nodes, args.run_name, args.load)

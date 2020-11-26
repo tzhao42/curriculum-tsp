@@ -15,8 +15,6 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
-# matplotlib.use("Agg")
-
 # NOTE: THIS FILE HAS NOT BEEN REFACTORED WITH NODE_DISTRIB OR CURRICULUMS
 
 
