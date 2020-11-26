@@ -35,7 +35,7 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     assert tuple(param.size()) == (num_tiles ** 2,)
     for p in param:
         assert p >= 0 and p <= 1
-    assert param.sum().item() == 1
+    assert abs(param.sum().item() - 1.0) < 1e-5
 
     # setting seeds
     torch.manual_seed(seed)
@@ -113,6 +113,13 @@ def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):
 
 # Spencer add your things here
 
+def set_tile_val(row, col, param, val, num_tiles=None):
+    if num_tiles == None:
+        num_tiles = int(math.sqrt(len(param)))
+    param[row*num_tiles+col] = val
+
+def normalize_param(param):
+    param /= param.sum()
 
 def get_uniform_param(num_tiles):
     """Return param value that corresponds to uniform distribution.
@@ -127,52 +134,275 @@ def get_uniform_param(num_tiles):
     param = torch.ones((num_tiles ** 2,))
     return param / param.sum()
 
-
-def get_line_param(slope, intercept, num_tiles):
-    """Return param value that roughly corresponds to a line.
+def get_up_line_param(num_tiles):
+    """Return param value that corresponds to up-line distribution.
 
     Args:
-        slope (float): slope of line
-        intercept (float): intercept of line
         num_tiles (int): number of tiles per side of unit square
 
     Return:
         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
             which sum to 1
     """
-    raise NotImplementedError
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,num_tiles):
+        set_tile_val(num_tiles-1-i,i,param,1)
+    normalize_param(param)
+    return param
 
-
-def get_crossing_lines_param(slope_1, intercept_1, slope_2, intercept_2, num_tiles):
-    """Return param value that roughly corresponds to two crossing lines.
+def get_down_line_param(num_tiles):
+    """Return param value that corresponds to down-line distribution.
 
     Args:
-        slope_1 (float): slope of line 1
-        intercept_1 (float): intercept of line 1
-        slope_2 (float): slope of line 2
-        intercept_2 (float): intercept of line 2
         num_tiles (int): number of tiles per side of unit square
 
     Return:
         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
             which sum to 1
     """
-    raise NotImplementedError
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,num_tiles):
+        set_tile_val(i,i,param,1)
+    normalize_param(param)
+    return param
 
-
-def get_circle_param(center, radius, num_tiles):
-    """Return param value that roughly corresponds to a circle.
+def get_x_shape_param(num_tiles):
+    """Return param value that corresponds to x-shape distribution.
 
     Args:
-        center (Tuple[float]): center of the circle (specified as (x,y))
-        radius (float): radius of the circle
         num_tiles (int): number of tiles per side of unit square
 
     Return:
         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
             which sum to 1
     """
-    raise NotImplementedError
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,num_tiles):
+        set_tile_val(num_tiles-1-i,i,param,1)
+    for i in range(0,num_tiles):
+        set_tile_val(i,i,param,1)
+    normalize_param(param)
+    return param
+
+def get_horiz_param(num_tiles):
+    """Return param value that corresponds to horiz distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    param = torch.zeros((num_tiles ** 2,))
+    row = num_tiles // 2
+    for i in range(0,num_tiles):
+        set_tile_val(row,i,param,1)
+    normalize_param(param)
+    return param
+
+def get_vert_param(num_tiles):
+    """Return param value that corresponds to vert distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    param = torch.zeros((num_tiles ** 2,))
+    col = num_tiles // 2
+    for i in range(0,num_tiles):
+        set_tile_val(i,col,param,1)
+    normalize_param(param)
+    return param
+
+def get_plus_param(num_tiles):
+    """Return param value that corresponds to plus distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    param = torch.zeros((num_tiles ** 2,))
+    row = num_tiles // 2
+    for i in range(0,num_tiles):
+        set_tile_val(row,i,param,1)
+    col = num_tiles // 2
+    for i in range(0,num_tiles):
+        set_tile_val(i,col,param,1)
+    
+    print("ZZ ")
+    print(param)
+    normalize_param(param)
+    return param
+
+def get_circle_param(num_tiles):
+    """Return param value that corresponds to circle distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    param = torch.zeros((num_tiles ** 2,))
+    # so uh this prly isn't the best idk
+    start_col = [0,0,num_tiles-1,num_tiles-1]
+    start_row = [(num_tiles-1)//2,num_tiles//2,(num_tiles-1)//2,num_tiles//2]
+    dr = [-1,1,-1,1]
+    dc = [1,1,-1,-1]
+    for i in range(0, 4):
+        cur_row = start_row[i]
+        cur_col = start_col[i]
+        while (cur_row >=0) and (cur_row < num_tiles) and (cur_col >= 0) and (cur_col < num_tiles):
+            set_tile_val(cur_row,cur_col,param,1)
+            cur_row += dr[i]
+            cur_col += dc[i]
+    normalize_param(param)
+    return param
+
+def get_border_param(num_tiles):
+    """Return param value that corresponds to border distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    param = torch.zeros((num_tiles ** 2,))
+    for row in range(0,num_tiles):
+        for col in range(0,num_tiles):
+            good_row = (row == 0) or (row==num_tiles-1)
+            good_col = (col == 0) or (col==num_tiles-1)
+            if good_row or good_col:
+                set_tile_val(row,col,param,1)
+    normalize_param(param)
+    return param
+
+def get_medium_pair_param(num_tiles, width=None):
+    """Return param value that corresponds to medium-pair distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    if width == None:
+        # idk how great this is
+        width = num_tiles // 2
+        if width - 2 >=3:
+            width -= 2
+        elif width - 1 >= 2:
+            width -= 1
+        width = max(width,1)
+    width = min(width,num_tiles)
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,width):
+        for j in range(0,width):
+            set_tile_val(i,num_tiles-j-1,param,1)
+            set_tile_val(num_tiles-1-i,j,param,1)
+    normalize_param(param)
+    return param
+
+def get_tiny_pair_param(num_tiles, width=None):
+    """Return param value that corresponds to tiny-pair distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    if width == None:
+        width = 1
+    width = min(width,num_tiles)
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,width):
+        for j in range(0,width):
+            set_tile_val(i,num_tiles-j-1,param,1)
+            set_tile_val(num_tiles-1-i,j,param,1)
+    normalize_param(param)
+    return param
+
+def get_tiny_quad_param(num_tiles, width=None):
+    """Return param value that corresponds to tiny-pair distribution.
+
+    Args:
+        num_tiles (int): number of tiles per side of unit square
+
+    Return:
+        torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+            which sum to 1
+    """
+    if width == None:
+        width = 1
+    width = min(width,num_tiles)
+    param = torch.zeros((num_tiles ** 2,))
+    for i in range(0,width):
+        for j in range(0,width):
+            set_tile_val(i,num_tiles-j-1,param,1)
+            set_tile_val(num_tiles-1-i,j,param,1)
+            set_tile_val(i,j,param,1)
+            set_tile_val(num_tiles-1-i,num_tiles-1-j,param,1)
+    normalize_param(param)
+    return param
+    
+# def get_line_param(slope, intercept, num_tiles):
+#     """Return param value that roughly corresponds to a line.
+
+#     Args:
+#         slope (float): slope of line
+#         intercept (float): intercept of line
+#         num_tiles (int): number of tiles per side of unit square
+
+#     Return:
+#         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+#             which sum to 1
+#     """
+#     raise NotImplementedError
+
+
+# def get_crossing_lines_param(slope_1, intercept_1, slope_2, intercept_2, num_tiles):
+#     """Return param value that roughly corresponds to two crossing lines.
+
+#     Args:
+#         slope_1 (float): slope of line 1
+#         intercept_1 (float): intercept of line 1
+#         slope_2 (float): slope of line 2
+#         intercept_2 (float): intercept of line 2
+#         num_tiles (int): number of tiles per side of unit square
+
+#     Return:
+#         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+#             which sum to 1
+#     """
+#     raise NotImplementedError
+
+
+# def get_circle_param(center, radius, num_tiles):
+#     """Return param value that roughly corresponds to a circle.
+
+#     Args:
+#         center (Tuple[float]): center of the circle (specified as (x,y))
+#         radius (float): radius of the circle
+#         num_tiles (int): number of tiles per side of unit square
+
+#     Return:
+#         torch tensor of shape (num_tiles ** 2, ) with nonnegeative elements
+#             which sum to 1
+#     """
+#     raise NotImplementedError
 
 
 # debug functions
@@ -184,7 +414,7 @@ def _validate_param(num_tiles, param):
     assert tuple(param.size()) == (num_tiles ** 2,)
     for p in param:
         assert p >= 0 and p <= 1
-    assert param.sum().item() == 1
+    assert abs(param.sum().item() - 1.0) < 1e-5
 
 
 def _visualize_param(num_tiles, param):
@@ -198,6 +428,8 @@ def _visualize_param(num_tiles, param):
     y = nodes[:, 1, :].flatten().numpy()
 
     plt.scatter(x, y)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
     plt.show()
 
 
@@ -205,43 +437,133 @@ if __name__ == "__main__":
     # debug flags
     debugging_get_param_nodes = False
     debugging_get_uniform_param = False
+    debugging_get_up_line_param = False
+    debugging_get_down_line_param = False
+    debugging_get_x_shape_param = False
+    debugging_get_horiz_param = False
+    debugging_get_vert_param = False
     debugging_get_line_param = False
-    debugging_get_crossing_lines_param = False
+    debugging_get_plus_param = False
     debugging_get_circle_param = False
+    debugging_get_border_param = False
+    debugging_get_medium_pair_param = False
+    debugging_get_tiny_pair_param = True
+    debugging_get_tiny_quad_param = True
+    debugging_get_crossing_lines_param = False
 
     if debugging_get_uniform_param:
         c_num_tiles = 8
         c_param = get_uniform_param(c_num_tiles)
         _validate_param(c_num_tiles, c_param)
         _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_line_param:
+    
+    if debugging_get_up_line_param:
         c_num_tiles = 8
-        c_slope = 1
-        c_intercept = 0.2
-        c_param = get_line_param(c_slope, c_intercept, c_num_tiles)
+        c_param = get_up_line_param(c_num_tiles)
         _validate_param(c_num_tiles, c_param)
         _visualize_param(c_num_tiles, c_param)
 
-    if debugging_get_crossing_lines_param:
+        
+    if debugging_get_down_line_param:
         c_num_tiles = 8
-        c_slope_1 = 1
-        c_intercept_1 = 0.2
-        c_slope_2 = -0.5
-        c_intercept_2 = 1
-        c_param = get_crossing_lines_param(
-            c_slope_1, c_intercept_1, c_slope_2, c_intercept_2, c_num_tiles
-        )
+        c_param = get_down_line_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+        
+    if debugging_get_x_shape_param:
+        c_num_tiles = 8
+        c_param = get_x_shape_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+        
+        
+    if debugging_get_horiz_param:
+        c_num_tiles = 8
+        c_param = get_horiz_param(c_num_tiles)
         _validate_param(c_num_tiles, c_param)
         _visualize_param(c_num_tiles, c_param)
 
+        
+    if debugging_get_vert_param:
+        c_num_tiles = 8
+        c_param = get_vert_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+
+    if debugging_get_plus_param:
+        c_num_tiles = 8
+        c_param = get_plus_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+    
     if debugging_get_circle_param:
         c_num_tiles = 8
-        c_center = (0.25, 0.25)
-        c_radius = (0.5, 0.5)
-        c_param = get_circle_param(c_center, c_radius, c_num_tiles)
+        c_param = get_circle_param(c_num_tiles)
         _validate_param(c_num_tiles, c_param)
         _visualize_param(c_num_tiles, c_param)
+    
+    
+    if debugging_get_border_param:
+        c_num_tiles = 8
+        c_param = get_border_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+        
+    
+    if debugging_get_medium_pair_param:
+        c_num_tiles = 8
+        c_param = get_medium_pair_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+        
+    
+    if debugging_get_tiny_pair_param:
+        c_num_tiles = 8
+        c_param = get_tiny_pair_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+        
+    
+    if debugging_get_tiny_quad_param:
+        c_num_tiles = 8
+        c_param = get_tiny_quad_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+    
+    if debugging_get_uniform_param:
+        c_num_tiles = 8
+        c_param = get_uniform_param(c_num_tiles)
+        _validate_param(c_num_tiles, c_param)
+        _visualize_param(c_num_tiles, c_param)
+
+
+    # if debugging_get_line_param:
+    #     c_num_tiles = 8
+    #     c_slope = 1
+    #     c_intercept = 0.2
+    #     c_param = get_line_param(c_slope, c_intercept, c_num_tiles)
+    #     _validate_param(c_num_tiles, c_param)
+    #     _visualize_param(c_num_tiles, c_param)
+
+    # if debugging_get_crossing_lines_param:
+    #     c_num_tiles = 8
+    #     c_slope_1 = 1
+    #     c_intercept_1 = 0.2
+    #     c_slope_2 = -0.5
+    #     c_intercept_2 = 1
+    #     c_param = get_crossing_lines_param(
+    #         c_slope_1, c_intercept_1, c_slope_2, c_intercept_2, c_num_tiles
+    #     )
+    #     _validate_param(c_num_tiles, c_param)
+    #     _visualize_param(c_num_tiles, c_param)
+
+    # if debugging_get_circle_param:
+    #     c_num_tiles = 8
+    #     c_center = (0.25, 0.25)
+    #     c_radius = (0.5, 0.5)
+    #     c_param = get_circle_param(c_center, c_radius, c_num_tiles)
+    #     _validate_param(c_num_tiles, c_param)
+    #     _visualize_param(c_num_tiles, c_param)
 
     if debugging_get_param_nodes:
         c_num_nodes = 20
