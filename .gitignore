@@ -1,5 +1,10 @@
+# Python
 __pycache__
-log/
-nohup.out
 
+# Saved models
+logs/
+
+# Out files
+nohup.out
+slurm*.out
 

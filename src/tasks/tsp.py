@@ -12,15 +12,27 @@ __getitem__, which gets processed in trainer.py to be None
 import os
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+from torch.utils.data import Dataset
+
+
+matplotlib.use("Agg")
 
 
 class TSPDataset(Dataset):
+    def __init__(
+        self, size=50, num_samples=1e6, seed=None, proportions=[1.0, 0.0, 0.0]
+    ):
+        """Create TSP dataset.
 
-    def __init__(self, size=50, num_samples=1e6, seed=None, proportions=[1.0,0.0,0.0]):
+        Args:
+            size (int): number of nodes per problem instance
+            num_samples (int): number of problem instances in dataset
+            seed (int): random seed
+            proportions (List[float]): *to be removed*
+        """
         # unit square, medium corners (0.2), small corners (0.01)
         super(TSPDataset, self).__init__()
 
@@ -31,27 +43,36 @@ class TSPDataset(Dataset):
         torch.manual_seed(seed)
         self.dataset = torch.rand((num_samples, 2, size))
         for i in range(0, num_samples):
+            rand_val = np.random.uniform(0, 1)
             for k in range(0, size):
-                rand_val = np.random.uniform(0,1)
                 if rand_val <= proportions[0]:
                     # uniform, do nothing
                     pass
-                elif rand_val-proportions[0] <= proportions[1]:
+                elif rand_val - proportions[0] <= proportions[1]:
                     # medium corners
-                    top = (np.random.randint(0,2) == 0)
+                    top = np.random.randint(0, 2) == 0
                     for j in range(0, 2):
                         if top:
-                            self.dataset[i][j][k] = np.random.uniform(0,0.2)
+                            self.dataset[i][j][k] = np.random.uniform(0, 0.2)
                         else:
-                            self.dataset[i][j][k] = np.random.uniform(0.8,1)
+                            self.dataset[i][j][k] = np.random.uniform(0.8, 1)
                 else:
                     # small corners
-                    top = (np.random.randint(0,2) == 0)
+                    top = np.random.randint(0, 2) == 0
                     for j in range(0, 2):
-                        if top:
-                            self.dataset[i][j][k] = np.random.uniform(0,0.01)
+                        if j == 0:
+                            # x cordinate
+                            if top:
+                                self.dataset[i][j][k] = np.random.uniform(1 - 0.01, 1)
+                            else:
+                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
                         else:
-                            self.dataset[i][j][k] = np.random.uniform(1-0.01,1)
+                            # y coordinate
+                            if top:
+                                self.dataset[i][j][k] = np.random.uniform(0, 0.01)
+                            else:
+                                self.dataset[i][j][k] = np.random.uniform(1 - 0.01, 1)
+
         self.dynamic = torch.zeros(num_samples, 1, size)
         self.num_nodes = size
         self.size = num_samples
@@ -63,11 +84,10 @@ class TSPDataset(Dataset):
         # (static, dynamic, start_loc)
         return (self.dataset[idx], self.dynamic[idx], [])
 
-
-def update_mask(mask, dynamic, chosen_idx):
-    """Marks the visited city, so it can't be selected a second time."""
-    mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
-    return mask
+    def update_mask(self, mask, dynamic, chosen_idx):
+        """Marks the visited city, so it can't be selected a second time."""
+        mask.scatter_(1, chosen_idx.unsqueeze(1), 0)
+        return mask
 
 
 def reward(static, tour_indices):
@@ -99,12 +119,11 @@ def reward(static, tour_indices):
 def render(static, tour_indices, save_path):
     """Plots the found tours."""
 
-    plt.close('all')
+    plt.close("all")
 
     num_plots = 3 if int(np.sqrt(len(tour_indices))) >= 3 else 1
 
-    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots,
-                           sharex='col', sharey='row')
+    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots, sharex="col", sharey="row")
 
     if num_plots == 1:
         axes = [[axes]]
@@ -123,13 +142,13 @@ def render(static, tour_indices, save_path):
 
         data = torch.gather(static[i].data, 1, idx).cpu().numpy()
 
-        #plt.subplot(num_plots, num_plots, i + 1)
+        # plt.subplot(num_plots, num_plots, i + 1)
         ax.plot(data[0], data[1], zorder=1)
-        ax.scatter(data[0], data[1], s=4, c='r', zorder=2)
-        ax.scatter(data[0, 0], data[1, 0], s=20, c='k', marker='*', zorder=3)
+        ax.scatter(data[0], data[1], s=4, c="r", zorder=2)
+        ax.scatter(data[0, 0], data[1, 0], s=20, c="k", marker="*", zorder=3)
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
 
     plt.tight_layout()
-    plt.savefig(save_path, bbox_inches='tight', dpi=400)
+    plt.savefig(save_path, bbox_inches="tight", dpi=400)
