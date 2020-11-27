@@ -43,14 +43,30 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     # can't think of a fast way to do this so we'll just iterate to get tiles
     tile_seeds = torch.rand((num_samples, num_nodes))
     tiles = torch.zeros((num_samples, 2, num_nodes))
+    all_vals = list()
     for i in range(num_samples):
         for j in range(num_nodes):
             tile_seed = tile_seeds[i, j]
 
             # generate a point
-            tiles[i, 0, j], tiles[i, 1, j] = _get_tile(
-                tile_seed, num_tiles, nonzero_indices, nonzero_vals
-            )
+            all_vals.append((tile_seeds[i,j],i,j))
+    all_vals.sort()
+    # getting tile index
+    cum_sum = 0
+    tile_index = -1
+    point = 0
+    for i in range(len(nonzero_vals)):
+        cum_sum += nonzero_vals[i]
+        while (point < len(all_vals)) and (all_vals[point][0] <= cum_sum):
+            tile_index = nonzero_indices[i]
+            x_pos = (tile_index % num_tiles) * (1 / num_tiles)
+            y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (1 / num_tiles)
+            tiles[all_vals[point][1], 0, all_vals[point][2]] = x_pos
+            tiles[all_vals[point][1], 1, all_vals[point][2]] = y_pos
+            point += 1
+    assert (point == len(all_vals))
+
+    # getting coordinates of bottom left corner of tile
 
     return tiles + offsets
 
