@@ -102,10 +102,13 @@ class TSPCurriculum:
             # load new stage and new dataset
             self._curr_stage_index += 1
             self._curr_stage = self._stages[self._curr_stage_index]
+        
+        if not self._finished:
+            # load dataset for new epoch
             self._curr_dataset = TSPDataset(
                 num_nodes=self._num_nodes,
                 num_samples=self._train_size,
-                seed=self._seed,
+                seed=self._seed * (self._curr_len + 1) + self._curr_epoch,
                 num_tiles=self._curr_stage.num_tiles,
                 param=self._curr_stage.param,
             )
@@ -146,7 +149,8 @@ class TSPCurriculum:
         self._val_dataset = TSPDataset(
             num_nodes=self._num_nodes,
             num_samples=self._val_size,
-            seed=self._seed + 1,
+            seed = self._seed * (self._curr_len + 1) + self._curr_len,
+            # seed=self._seed + 1,
             num_tiles=num_tiles,
             param=param,
         )
@@ -162,7 +166,7 @@ class TSPCurriculum:
         self._curr_dataset = TSPDataset(
             num_nodes=self._num_nodes,
             num_samples=self._train_size,
-            seed=self._seed,
+            seed=self._seed * (self._curr_len + 1) + self._curr_epoch,
             num_tiles=self._curr_stage.num_tiles,
             param=self._curr_stage.param,
         )
@@ -208,7 +212,6 @@ class TSPDataset(Dataset):
 
         if seed is None:
             seed = np.random.randint(123456789)
-
         np.random.seed(seed)
         torch.manual_seed(seed)
         self.dataset = get_param_nodes(

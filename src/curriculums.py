@@ -275,7 +275,7 @@ def get_curriculum_thirteen(
 def get_curriculum_fourteen(
     epochs, num_nodes, train_size, val_size, seed, debug
 ):
-    """Creafe curriculum for experiment fourteen."""
+    """Create curriculum for experiment fourteen."""
     steps = [
         (get_x_shape_param, 20),
     ]
@@ -289,7 +289,7 @@ def get_curriculum_fourteen(
 def get_curriculum_fifteen(
     epochs, num_nodes, train_size, val_size, seed, debug
 ):
-    """Creafe curriculum for experiment fifteen."""
+    """Create curriculum for experiment fifteen."""
     steps = [
         (get_down_line_param, 5),
         (get_up_line_param, 5),
@@ -305,7 +305,7 @@ def get_curriculum_fifteen(
 def get_curriculum_sixteen(
     epochs, num_nodes, train_size, val_size, seed, debug
 ):
-    """Creafe curriculum for experiment sixteen."""
+    """Create curriculum for experiment sixteen."""
     steps = [
         (get_border_param, 20),
     ]
@@ -319,7 +319,7 @@ def get_curriculum_sixteen(
 def get_curriculum_seventeen(
     epochs, num_nodes, train_size, val_size, seed, debug
 ):
-    """Creafe curriculum for experiment seventeen."""
+    """Create curriculum for experiment seventeen."""
     steps = [
         (get_tiny_quad_param, 10),
         (get_border_param, 10),
