@@ -252,8 +252,8 @@ def test_tsp(
             render_fn(static, tour_indices, path)
 
     # calculate and log results
-    avg_tour_length = cum_tour_length / len(data_loader)
-    avg_opt_gap = cum_opt_gap / len(data_loader)
+    avg_tour_length = cum_tour_length / len(data_loader.dataset)
+    avg_opt_gap = cum_opt_gap / len(data_loader.dataset)
     run_io.log(f"Average tour length: {avg_tour_length}\n")
     run_io.log(f"Average optimality gap: {avg_opt_gap}\n")
 
@@ -287,7 +287,7 @@ def validate(
             path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
 
-    avg_reward = cum_reward / len(data_loader)
+    avg_reward = cum_reward / len(data_loader.dataset)
 
     return avg_reward
 
@@ -306,9 +306,7 @@ def train_single_epoch(
     actor.train()
     critic.train()
 
-    # Not sure why critic_rewards is being kept track of, but we'll keep that
-    # the same for the time being
-    times, losses, rewards, critic_rewards = [], [], [], []
+    times, losses, rewards = [], [], []
 
     start = time.time()
 
@@ -349,9 +347,8 @@ def train_single_epoch(
         critic_opt.step()
 
         # keeping track of values for logging
-        critic_rewards.append(torch.mean(critic_est.detach()).item())
-        rewards.append(torch.mean(reward.detach()).item())
         losses.append(torch.mean(actor_loss.detach()).item())
+        rewards.append(torch.mean(reward.detach()).item())
 
         # Logging training progress
         if batch_idx % 100 == 0:
@@ -449,8 +446,8 @@ def train_curriculum(
         mean_reward = np.mean(rewards)
 
         run_io.log(
-            "Epoch %d, Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, "
-            "took: %2.4fs (%2.4fs / 100 batches)\n\n"
+            "Epoch %d, Mean epoch loss/reward/val reward: %2.4f, %2.4f, %2.4f" 
+            ", took: %2.4fs (%2.4fs / 100 batches)\n\n"
             % (
                 epoch,
                 mean_loss,
@@ -478,6 +475,13 @@ def main_tsp(args, run_io):
         args.val_size,
         regen=args.regen,
         debug=DEBUG,
+    )
+
+    val_loader = DataLoader(
+        curriculum.get_val_dataset(),
+        args.batch_size,
+        shuffle=False,
+        num_workers=0,
     )
 
     # creating models on cpu
@@ -526,12 +530,6 @@ def main_tsp(args, run_io):
         )
     elif args.mode == "test":
         # test only for test mode
-        val_loader = DataLoader(
-            curriculum.get_val_dataset(),
-            args.batch_size,
-            shuffle=False,
-            num_workers=0,
-        )
         test_tsp(
             val_loader,
             actor,
@@ -553,12 +551,6 @@ def main_tsp(args, run_io):
             args.critic_lr,
             args.max_grad_norm,
             run_io,
-        )
-        val_loader = DataLoader(
-            curriculum.get_val_dataset(),
-            args.batch_size,
-            shuffle=False,
-            num_workers=0,
         )
         test_tsp(
             val_loader,
