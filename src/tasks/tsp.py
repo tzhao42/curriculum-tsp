@@ -10,21 +10,20 @@ __getitem__, which gets processed in trainer.py to be None
 """
 
 import os
-import numpy as np
-import torch
+
 import matplotlib
 import matplotlib.pyplot as plt
-
+import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from . import node_distrib
 from .node_distrib import get_param_nodes
 
-matplotlib.use("Agg")
 
 class _TSPStage:
     """Stage of curriculum for training on tsp task.
-    
+
     This is a helper object to keep track of a few things.
 
     Attributes:
@@ -33,6 +32,7 @@ class _TSPStage:
         start (int): the epoch number at which this stage activates
         length (int): the number of epochs this stage runs for
     """
+
     def __init__(self, num_tiles, param, start, length):
         """Create TSPStage instance.
 
@@ -50,105 +50,175 @@ class _TSPStage:
 
 class TSPCurriculum:
     """Curriculum for training on tsp task."""
-    def __init__(self, num_nodes, num_samples, seed):
+
+    def __init__(
+        self, num_nodes, train_size, val_size, regen=False, debug=False
+    ):
         """Create TSP curriculum.
 
         Args:
             num_nodes (int): number of nodes per problem instance
-            num_samples (int): number of problem instances in dataset
-            seed (int): random seed
+            train_size (int): number of training points
+            val_size (int): number of validation points
+            regen (bool): whether to regenerate each dataset every epoch
+            debug (bool): whether to run in debug (visualization) mode
         """
         self._num_nodes = num_nodes
-        self._num_samples = num_samples
-        self._seed = seed
+        self._train_size = train_size
+        self._val_size = val_size
+        self._regen = regen
+        self._debug = debug
 
-        self._stages = list()
+        # need to clean this up
 
-        self._curr_stage_index = None
+        # training (initialization values must be reset)
+        self._all_stages = list()
+        self._stages = None  # a generator
+
         self._curr_stage = None
         self._curr_dataset = None
 
         self._curr_epoch = -1
         self._curr_len = 0
 
-        self._finished = False # need to figure out how to finish up
+        self._finished = False  # need to figure out how to finish up
 
+        # validation
+        self._val_dataset = None
+
+    def _generate_curr_dataset(self):
+        """Generate current training dataset.
+
+        Call this helper method to generate a dataset with the current stage.
+        """
+        self._curr_dataset = TSPDataset(
+            num_nodes=self._num_nodes,
+            num_samples=self._train_size,
+            num_tiles=self._curr_stage.num_tiles,
+            param=self._curr_stage.param,
+        )
 
     def increment_epoch(self):
         """Increment the current epoch of the curriculum.
-        
+
         Indicates that we have trained for an epoch.
         """
+        # TODO: clean up
+
+        assert not self._finished
+
         self._curr_epoch += 1
 
         if self._curr_epoch == self._curr_len:
             # can't increment anymore
             self._finished = True
 
-        new_stage_epoch = self._curr_stage.start + self._curr_stage.length + 1
-        if self._curr_epoch == new_stage_epoch and not self._finished:
+        if (
+            self._curr_epoch
+            == self._curr_stage.start + self._curr_stage.length
+            and not self._finished
+        ):
             # load new stage and new dataset
-            self._curr_stage_index += 1
-            self._curr_stage = self._stages[self._curr_stage_index]
-            self._curr_dataset = TSPDataset(
-                num_nodes=self._num_nodes,
-                num_samples=self._num_samples,
-                seed=self._seed,
-                num_tiles=self._curr_stage.num_tiles,
-                param=self._curr_stage.param
-            )
+            self._curr_stage = next(self._stages)
+            if not self._regen:
+                self._generate_curr_dataset()
 
     def get_dataset(self):
-        """Get the dataset of the current epoch."""
+        """Get the training dataset of the current epoch."""
         assert not self._finished
+        if self._regen:
+            self._generate_curr_dataset()
+
+        if self._debug:
+            self.visualize_dataset(self._curr_dataset)
         return self._curr_dataset
 
+    def get_val_dataset(self):
+        """Get the validation dataset."""
+        if self._debug:
+            self.visualize_dataset(self._val_dataset, val=True)
+        return self._val_dataset
+
     def add_stage(self, num_tiles, param, num_epochs):
-        """Add a stage to the curriculum.
+        """Add a training stage to the curriculum.
 
         Args
             num_tiles (int): number of tiles
             param (torch.Tensor): parameter for distribution of nodes
             num_epochs (int): number of epochs to train on this distribution
         """
+        assert not self._finished
         curr_stage = _TSPStage(num_tiles, param, self._curr_len, num_epochs)
-        self._stages.append(curr_stage)
+        self._all_stages.append(curr_stage)
         self._curr_len += num_epochs
-    
-    def start(self):
-        """Start up the curriculum after adding all stages."""
-        self._curr_epoch = 0
-        self._curr_stage_index = 0
-        self._curr_stage = self._stages[self._curr_stage_index]
-        self._curr_dataset = TSPDataset(
+
+    def add_val(self, num_tiles, param):
+        """Add a validation dataset.
+
+        Args
+            num_tiles (int): number of tiles
+            param (torch.Tensor): parameter for distribution of nodes
+        """
+        assert not self._finished
+        assert self._val_dataset is None
+
+        self._val_dataset = TSPDataset(
             num_nodes=self._num_nodes,
-            num_samples=self._num_samples,
-            seed=self._seed,
-            num_tiles=self._curr_stage.num_tiles,
-            param=self._curr_stage.param
+            num_samples=self._val_size,
+            num_tiles=num_tiles,
+            param=param,
         )
+
+    def start(self):
+        """Start up the curriculum after adding all training stages."""
+        assert not self._finished
+        assert self._val_dataset
+
+        self._curr_epoch = 0
+        self._stages = (stage for stage in self._all_stages)
+        self._curr_stage = next(self._stages)
+        self._generate_curr_dataset()
+
+    def visualize_dataset(self, tspdataset, val=False):
+        """Print a visualization of current dataset."""
+        x = tspdataset.dataset[:, 0, :].flatten().numpy()
+        y = tspdataset.dataset[:, 1, :].flatten().numpy()
+
+        plt.clf()
+        plt.scatter(x, y)
+        if val:
+            plt.title("Validation")
+        else:
+            plt.title(f"Epoch {self._curr_epoch}")
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+
+        plt.draw()
+        plt.pause(2)
+        plt.close()
+        plt.clf()
 
 
 class TSPDataset(Dataset):
     def __init__(
-        self, num_nodes=50, num_samples=1e6, seed=None, num_tiles=None, param=None
+        self,
+        num_nodes=50,
+        num_samples=1e6,
+        num_tiles=None,
+        param=None,
     ):
         """Create TSP dataset.
 
         Args:
             num_nodes (int): number of nodes per problem instance
             num_samples (int): number of problem instances in dataset
-            seed (int): random seed
             param (torch.Tensor): parameter for distribution of nodes
         """
         super(TSPDataset, self).__init__()
 
-        if seed is None:
-            seed = np.random.randint(123456789)
-
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        self.dataset = get_param_nodes(num_nodes, num_samples, seed, num_tiles, param)
+        self.dataset = get_param_nodes(
+            num_nodes, num_samples, num_tiles, param
+        )
         self.dynamic = torch.zeros(num_samples, 1, num_nodes)
         self.num_nodes = num_nodes
         self.size = num_samples
@@ -161,8 +231,8 @@ class TSPDataset(Dataset):
         return (self.dataset[idx], self.dynamic[idx], [])
 
 
-
 # tsp has no update mask function (it points to None)
+
 
 def update_mask(mask, dynamic, chosen_idx):
     """Marks the visited city, so it can't be selected a second time."""
@@ -203,7 +273,9 @@ def render(static, tour_indices, save_path):
 
     num_plots = 3 if int(np.sqrt(len(tour_indices))) >= 3 else 1
 
-    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots, sharex="col", sharey="row")
+    _, axes = plt.subplots(
+        nrows=num_plots, ncols=num_plots, sharex="col", sharey="row"
+    )
 
     if num_plots == 1:
         axes = [[axes]]

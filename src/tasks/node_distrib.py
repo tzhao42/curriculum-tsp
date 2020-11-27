@@ -1,10 +1,11 @@
 """Parameterization for distributions of nodes on [0,1]x[0,1] and utils."""
 
 import math
+
 import torch
 
 
-def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
+def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     """Create collection of points distributed according to parameters.
 
     Performance notes: 1) We can usually assume that num_tiles is somewhat
@@ -14,7 +15,6 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     Args:
         num_nodes (int): number of nodes per datapoint
         num_samples (int): number of datapoints
-        seed (int): random seed
         num_tiles (int): number of tiles per side (for a total number of
             num_tiles^2 tiles in the parameterization)
         distrib (torch.Tensor): parameter describing distribution of data
@@ -28,17 +28,9 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     assert num_nodes > 0
     assert isinstance(num_samples, int)
     assert num_samples > 0
-    assert isinstance(seed, int)
     assert isinstance(num_tiles, int)
     assert num_tiles > 0
-    assert isinstance(param, torch.Tensor)
-    assert tuple(param.size()) == (num_tiles ** 2,)
-    for p in param:
-        assert p >= 0 and p <= 1
-    assert abs(param.sum().item() - 1.0) < 1e-5
-
-    # setting seeds
-    torch.manual_seed(seed)
+    _validate_param(num_tiles, param)
 
     # some utility lists
     nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
@@ -359,9 +351,8 @@ def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):
         a tuple (x,y) representing the bottom left corner of the node
             specified node seed
     """
-    # This can probably be done in torch/numpy, but I'm in a hurry and will do 
+    # This can probably be done in torch/numpy, but I'm in a hurry and will do
     # this in raw python.
-
 
     # getting tile index
     cum_sum = 0
@@ -391,9 +382,6 @@ def _normalize_param(param):
     param /= param.sum()
 
 
-# debug functions
-
-
 def _validate_param(num_tiles, param):
     """Checks param for obvious bugs."""
     assert isinstance(param, torch.Tensor)
@@ -403,10 +391,13 @@ def _validate_param(num_tiles, param):
     assert abs(param.sum().item() - 1.0) < 1e-5
 
 
+# visualization
+
+
 def _visualize_param(num_tiles, param):
     """Plot nodes drawn from param! For debug use only."""
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
 
     nodes = get_param_nodes(10, 10, 12345, num_tiles, param)
 
@@ -518,7 +509,6 @@ if __name__ == "__main__":
     if debugging_get_param_nodes:
         c_num_nodes = 20
         c_num_samples = 100
-        c_seed = 12345
         c_num_tiles = 8
         c_param = torch.tensor([1] + [0 for i in range(63)])
 
@@ -527,7 +517,7 @@ if __name__ == "__main__":
         start = time.time()
 
         nodes = get_param_nodes(
-            c_num_nodes, c_num_samples, c_seed, c_num_tiles, c_param
+            c_num_nodes, c_num_samples, c_num_tiles, c_param
         )
 
         end = time.time()

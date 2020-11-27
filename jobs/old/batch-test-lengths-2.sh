@@ -1,10 +1,9 @@
 #!/bin/bash
-#SBATCH -t 24:00:00
+#SBATCH -t 4:00:00
 #SBATCH -N 1
-#SBATCH -n 4
+#SBATCH -n 2
 #SBATCH --mem=12G
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=12GB
 #SBATCH -p normal
 
 # Setting up singularity variable
@@ -15,9 +14,9 @@ cd ${STARTING_DIRECTORY}
 module load openmind/singularity
 hostname
 nvidia-smi
-singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.15-0.85-0.00-20201114T193737 --run-name full-model-eval --proportions 0.15 0.85 0.00 &
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.15-0.85-0.00-20201114T193737 --run-name full-model-eval --proportions 0.15 0.85 0.00
 singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.00-1.00-0.00-20201114T193737 --run-name full-model-eval --proportions 0.00 1.00 0.00
-singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.85-0.00-0.15-20201114T193737 --run-name full-model-eval --proportions 0.85 0.00 0.15 &
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.85-0.00-0.15-20201114T193737 --run-name full-model-eval --proportions 0.85 0.00 0.15
 
 sleep 24h
 
