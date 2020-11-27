@@ -4,7 +4,7 @@
 #SBATCH -n 4
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=12GB
+#SBATCH --constraint=6GB
 #SBATCH -p normal
 
 # Setting up singularity variable

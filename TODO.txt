@@ -1,21 +1,9 @@
-Development:
-1) Restructure files
-    - flesh out constants better
-    - understand models -- what is actor critic?
-    - streamline model loading and partial training
-    - cut out picture generation
-    - make better naming schemes
-2) Restructure directories
-    - job_scripts could be renamed jobs
-3) Test to make sure restructure works
-    - interactive environment and debug.sh with small train/test set sizes
-    - non-interactive environment with sbatch on a real job script with reduced dataset
+1) Figure out resource consumption of tsp-100 tasks
+2) Figure out how quickly/slowly --regen runs
 
-Openmind:
-1) Rerun training job
-2) Evaluate on more: 50-100 validation set
-3) Run adversarial training job
+3) Run test jobs for static and experiments 1-17
 
-Research:
-1) Decide on a parameterization of distribution
-2) Implement adversarial training approach
+4) run static-20, static-100, dynamic-20, dynamic-100
+5) run experiments 1-17 with --num-nodes 100
+
+

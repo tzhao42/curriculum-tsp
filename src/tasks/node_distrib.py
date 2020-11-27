@@ -4,78 +4,7 @@ import math
 
 import torch
 
-def balanced_probabilities(indices, vals):
-    """Creates a list of length len(indices), where each entry
-    has a pair of two elements, and the sum of probability mass in each
-    index is 1/len(indices). This allows O(1) sampling from a distribution.
-    Pretty cool!
-    Args:
-        indices (int): indices of each probability state
-        vals (float): probability mass for corresponding state (sums to 1)
 
-    Returns:
-        list of length len(indices). In the form (state1, state2, prob1)
-    select state1 with probability prob1/len(indices), state2 w.p. (1-prob1)/len(indices)
-
-    To sample from this distribution, sample a random index "i" in the returned list. Then, sample
-    a uniform value "x" in range [0,1]. Use ret[i][0] if x<=ret[i][2] and ret[i][1] otherwise
-    """
-
-    ret = list()
-    uniform = 1/len(indices)
-    # (state,probability) for probability <uniform
-    small = list()
-    # (state,probability) for probability >=uniform
-    large = list()
-    for i in range(0, len(indices)):
-        if vals[i] < uniform:
-            small.append((indices[i],vals[i]))
-        else:
-            large.append((indices[i],vals[i]))
-    while len(ret) < len(indices):
-        if len(small) > 0:
-            if len(large) == 0:
-                assert len(small) == (len(indices)-len(ret))
-                for i in range(0, len(small)):
-                    assert abs(small[i][1]-uniform)<1e-5
-                while len(small) > 0:
-                    cur = small.pop()
-                    ret.append((cur[0],cur[0],1.0))
-            else:
-                cur_small = small.pop()
-                cur_large = large.pop()
-                cur_large[1] -= (uniform-cur_small[1])
-                ret.append((cur_small[0],cur_large[0],cur_small[1]))
-                if cur_large[1] < uniform:
-                    small.append(cur_large)
-                else:
-                    large.append(cur_large)
-        else:
-            assert (len(large) == (len(indices) - len(ret)))
-            for i in range(0, len(large)):
-                assert abs(large[i][1]-uniform)<1e-5
-            while len(large) > 0:
-                cur = large.pop()
-                ret.append((cur[0],cur[0],1.0))
-            
-    assert len(small) == 0
-    assert len(large) == 0
-    assert len(ret) == len(indices)
-    # testing code to make sure this works
-    # is unnecessary computation so is
-    # commented out
-
-    # check = dict()
-    # for ind in indices:
-    #     check[ind] = 0
-    # for i in range(0, len(ret)):
-    #     assert ret[i][0] in check
-    #     assert ret[i][1] in check
-    #     check[ret[i][0]] += uniform * ret[i][2]
-    #     check[ret[i][1]] += uniform * (1.0 - ret[i][2])
-    # for i in range(0,len(indices)):
-    #     assert abs(check[indices[i]] - vals[i]) < 1e-5
-    return ret
 def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     """Create collection of points distributed according to parameters.
 
@@ -107,7 +36,7 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
     nonzero_vals = [param[i].item() for i in nonzero_indices]
 
-    balanced = balanced_probabilities(nonzero_indices, nonzero_vals)
+    balanced = _balanced_probabilities(nonzero_indices, nonzero_vals)
 
     # offests (where in the tile each node is located)
     offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
@@ -116,21 +45,23 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     # can't think of a fast way to do this so we'll just iterate to get tiles
     # tile_seeds = torch.rand((num_samples, num_nodes))
     tiles = torch.zeros((num_samples, 2, num_nodes))
-    ind_seeds = torch.randint(0,len(balanced),(num_samples, num_nodes))
+    ind_seeds = torch.randint(0, len(balanced), (num_samples, num_nodes))
     val_seeds = torch.rand((num_samples, num_nodes))
-    
+
     for i in range(num_samples):
         for j in range(num_nodes):
             tile_index = -1
-            if val_seeds[i,j] < balanced[ind_seeds[i, j]][2]:
+            if val_seeds[i, j] < balanced[ind_seeds[i, j]][2]:
                 tile_index = balanced[ind_seeds[i, j]][0]
             else:
                 tile_index = balanced[ind_seeds[i, j]][1]
             x_pos = (tile_index % num_tiles) * (1 / num_tiles)
-            y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (1 / num_tiles)
+            y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (
+                1 / num_tiles
+            )
             tiles[i, 0, j] = x_pos
             tiles[i, 1, j] = y_pos
-    
+
     return tiles + offsets
 
 
@@ -399,6 +330,83 @@ def get_tiny_quad_param(num_tiles, width=None):
 
 
 # helper functions
+
+
+def _balanced_probabilities(indices, vals):
+    """Creates a list of length len(indices), where each entry
+    has a pair of two elements, and the sum of probability mass in each
+    index is 1/len(indices). This allows O(1) sampling from a distribution.
+    Pretty cool!
+    Args:
+        indices (int): indices of each probability state
+        vals (float): probability mass for corresponding state (sums to 1)
+
+    Returns:
+        list of length len(indices). In the form (state1, state2, prob1)
+    select state1 with probability prob1/len(indices), state2 w.p. (1-prob1)/len(indices)
+
+    To sample from this distribution, sample a random index "i" in the
+    returned list. Then, sample a uniform value "x" in range [0,1]. Use
+    ret[i][0] if x<=ret[i][2] and ret[i][1] otherwise.
+    """
+
+    ret = list()
+    uniform = 1 / len(indices)
+    # (state,probability) for probability <uniform
+    small = list()
+    # (state,probability) for probability >=uniform
+    large = list()
+    for i in range(0, len(indices)):
+        if vals[i] < uniform:
+            small.append((indices[i], vals[i]))
+        else:
+            large.append((indices[i], vals[i]))
+    while len(ret) < len(indices):
+        if len(small) > 0:
+            if len(large) == 0:
+                assert len(small) == (len(indices) - len(ret))
+                for i in range(0, len(small)):
+                    assert abs(small[i][1] - uniform) < 1e-5
+                while len(small) > 0:
+                    cur = small.pop()
+                    ret.append((cur[0], cur[0], 1.0))
+            else:
+                cur_small = small.pop()
+                cur_large = large.pop()
+                cur_large[1] -= uniform - cur_small[1]
+                ret.append((cur_small[0], cur_large[0], cur_small[1]))
+                if cur_large[1] < uniform:
+                    small.append(cur_large)
+                else:
+                    large.append(cur_large)
+        else:
+            assert len(large) == (len(indices) - len(ret))
+            for i in range(0, len(large)):
+                assert abs(large[i][1] - uniform) < 1e-5
+            while len(large) > 0:
+                cur = large.pop()
+                ret.append((cur[0], cur[0], 1.0))
+
+    assert len(small) == 0
+    assert len(large) == 0
+    assert len(ret) == len(indices)
+
+    # testing code to make sure this works
+    # is unnecessary computation so is
+    # commented out
+
+    # check = dict()
+    # for ind in indices:
+    #     check[ind] = 0
+    # for i in range(0, len(ret)):
+    #     assert ret[i][0] in check
+    #     assert ret[i][1] in check
+    #     check[ret[i][0]] += uniform * ret[i][2]
+    #     check[ret[i][1]] += uniform * (1.0 - ret[i][2])
+    # for i in range(0,len(indices)):
+    #     assert abs(check[indices[i]] - vals[i]) < 1e-5
+
+    return ret
 
 
 def _get_tile(tile_seed, num_tiles, nonzero_indices, nonzero_vals):

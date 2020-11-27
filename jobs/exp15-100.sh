@@ -2,7 +2,7 @@
 #SBATCH -t 48:00:00
 #SBATCH -N 1
 #SBATCH -n 2
-#SBATCH --mem=8G
+#SBATCH --mem=12G
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=12GB
 #SBATCH -p normal
@@ -16,9 +16,8 @@ module load openmind/singularity
 hostname
 nvidia-smi
 
-singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-static-uniform-20201127T022912 --run-name test-static-uniform  --curriculum 0 & 
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --num-nodes 100 --mode all --run-name static-exp-15 --curriculum 15 &
 
-sleep 2h
+sleep 3h
 nvidia-smi
 sleep 48h
-

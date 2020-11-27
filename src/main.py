@@ -66,6 +66,7 @@ def parse_arguments():
     parser.add_argument("--num-nodes", default=20, type=int)
     parser.add_argument("--curriculum", default=0, type=int)
     parser.add_argument("--regen", default=False, action="store_true")
+    parser.add_argument("--gortools", default=False, action="store_true")
 
     # model params
     parser.add_argument("--hidden-size", default=128, type=int)
@@ -216,7 +217,7 @@ class RunIO:
 
 
 def test_tsp(
-    data_loader, actor, reward_fn, render_fn=None, num_plot=5, run_io=None
+    data_loader, actor, reward_fn, gortools, render_fn=None, num_plot=5, run_io=None
 ):
     """Compare performance of model and google OR tools."""
 
@@ -236,26 +237,30 @@ def test_tsp(
         with torch.no_grad():
             tour_indices, _ = actor.forward(static, dynamic, x0)
 
-        # compute optimality gap
         model_tour_lengths = reward_fn(static, tour_indices)
-        optimal_tour_lengths = get_batched_or_tsp(static, ORTOOLS_TSP_TIMEOUT)
-        curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
+        if gortools:
+            # compute optimality gap
+            optimal_tour_lengths = get_batched_or_tsp(static, ORTOOLS_TSP_TIMEOUT)
+            curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
 
         # increment cumulative values
         cum_tour_length += model_tour_lengths.cpu().sum().item()
-        cum_opt_gap += curr_opt_gaps.sum().item()
+        mean_tour_length = model_tour_lengths.cpu().mean().item()
+        
+        if gortools:
+            cum_opt_gap += curr_opt_gaps.sum().item()
 
-        mean_opt_gap = curr_opt_gaps.mean().item()
         if render_fn is not None and batch_idx < num_plot:
-            name = "batch%d_%2.4f.png" % (batch_idx, mean_opt_gap)
+            name = "batch%d_%2.4f.png" % (batch_idx, mean_tour_length)
             path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
 
     # calculate and log results
     avg_tour_length = cum_tour_length / len(data_loader.dataset)
-    avg_opt_gap = cum_opt_gap / len(data_loader.dataset)
     run_io.log(f"Average tour length: {avg_tour_length}\n")
-    run_io.log(f"Average optimality gap: {avg_opt_gap}\n")
+    if gortools:
+        avg_opt_gap = cum_opt_gap / len(data_loader.dataset)
+        run_io.log(f"Average optimality gap: {avg_opt_gap}\n")
 
 
 def validate(
@@ -280,12 +285,13 @@ def validate(
 
         reward_tensor = reward_fn(static, tour_indices)
         reward = reward_tensor.cpu().mean().item()
-        cum_reward += reward_tensor.cpu().sum().item()
 
         if render_fn is not None and batch_idx < num_plot:
             name = "batch%d_%2.4f.png" % (batch_idx, reward)
             path = os.path.join(run_io.validate_dir, name)
             render_fn(static, tour_indices, path)
+
+        cum_reward += reward_tensor.cpu().sum().item()
 
     avg_reward = cum_reward / len(data_loader.dataset)
 
@@ -378,6 +384,7 @@ def train_curriculum(
     actor,
     critic,
     curriculum,
+    val_loader,
     reward_fn,
     render_fn,
     epochs,
@@ -388,11 +395,6 @@ def train_curriculum(
     run_io,
 ):
     """Constructs the main actor & critic networks, and performs training."""
-    # val loader
-    val_loader = DataLoader(
-        curriculum.get_val_dataset(), batch_size, shuffle=False, num_workers=0
-    )
-
     # optimizers
     actor_optim = optim.Adam(actor.parameters(), lr=actor_lr)
     critic_optim = optim.Adam(critic.parameters(), lr=critic_lr)
@@ -446,7 +448,7 @@ def train_curriculum(
         mean_reward = np.mean(rewards)
 
         run_io.log(
-            "Epoch %d, Mean epoch loss/reward/val reward: %2.4f, %2.4f, %2.4f" 
+            "Epoch %d, Mean epoch loss/reward/val reward: %2.4f, %2.4f, %2.4f"
             ", took: %2.4fs (%2.4fs / 100 batches)\n\n"
             % (
                 epoch,
@@ -519,6 +521,7 @@ def main_tsp(args, run_io):
             actor,
             critic,
             curriculum,
+            val_loader,
             tsp.reward,
             tsp.render,
             args.epochs,
@@ -534,6 +537,7 @@ def main_tsp(args, run_io):
             val_loader,
             actor,
             tsp.reward,
+            args.gortools,
             tsp.render,
             num_plot=5,
             run_io=run_io,
@@ -543,6 +547,7 @@ def main_tsp(args, run_io):
             actor,
             critic,
             curriculum,
+            val_loader,
             tsp.reward,
             tsp.render,
             args.epochs,
@@ -556,6 +561,7 @@ def main_tsp(args, run_io):
             val_loader,
             actor,
             tsp.reward,
+            args.gortools,
             tsp.render,
             num_plot=5,
             run_io=run_io,
@@ -665,8 +671,8 @@ if __name__ == "__main__":
 
     # taking care of debug stuff
     if args.debug:
-        args.train_size = 5
-        args.val_size = 3
+        args.train_size = 4
+        args.val_size = 4
         args.batch_size = 2
         args.epochs = 20
 

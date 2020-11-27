@@ -194,7 +194,7 @@ class TSPCurriculum:
         plt.ylim(0, 1)
 
         plt.draw()
-        plt.pause(2)
+        plt.pause(1)
         plt.close()
         plt.clf()
 
@@ -231,7 +231,7 @@ class TSPDataset(Dataset):
         return (self.dataset[idx], self.dynamic[idx], [])
 
 
-# tsp has no update mask function (it points to None)
+# tsp has no update dynamic function (it points to None)
 
 
 def update_mask(mask, dynamic, chosen_idx):

@@ -29,12 +29,12 @@ def make_curriculum(
 
     curriculum = TSPCurriculum(num_nodes, train_size, val_size, regen, debug)
 
+    curriculum.add_val(NUM_TILES, val_param)
+
     for step in steps:
         param_fn, num_epochs = step[0], step[1]
         param = param_fn(NUM_TILES)
         curriculum.add_stage(NUM_TILES, param, num_epochs)
-
-    curriculum.add_val(NUM_TILES, val_param)
 
     curriculum.start()
     return curriculum
