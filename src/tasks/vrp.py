@@ -19,18 +19,11 @@ from torch.utils.data import Dataset
 
 
 class VehicleRoutingDataset(Dataset):
-    def __init__(
-        self, num_samples, input_size, max_load=20, max_demand=9, seed=None
-    ):
+    def __init__(self, num_samples, input_size, max_load=20, max_demand=9):
         super(VehicleRoutingDataset, self).__init__()
 
         if max_load < max_demand:
             raise ValueError(":param max_load: must be > max_demand")
-
-        if seed is None:
-            seed = np.random.randint(1234567890)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
 
         self.num_samples = num_samples
         self.max_load = max_load

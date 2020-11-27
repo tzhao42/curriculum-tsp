@@ -5,7 +5,7 @@ import math
 import torch
 
 
-def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
+def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     """Create collection of points distributed according to parameters.
 
     Performance notes: 1) We can usually assume that num_tiles is somewhat
@@ -15,7 +15,6 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     Args:
         num_nodes (int): number of nodes per datapoint
         num_samples (int): number of datapoints
-        seed (int): random seed
         num_tiles (int): number of tiles per side (for a total number of
             num_tiles^2 tiles in the parameterization)
         distrib (torch.Tensor): parameter describing distribution of data
@@ -29,13 +28,9 @@ def get_param_nodes(num_nodes, num_samples, seed, num_tiles, param):
     assert num_nodes > 0
     assert isinstance(num_samples, int)
     assert num_samples > 0
-    assert isinstance(seed, int)
     assert isinstance(num_tiles, int)
     assert num_tiles > 0
     _validate_param(num_tiles, param)
-
-    # setting seeds
-    torch.manual_seed(seed)
 
     # some utility lists
     nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
@@ -514,7 +509,6 @@ if __name__ == "__main__":
     if debugging_get_param_nodes:
         c_num_nodes = 20
         c_num_samples = 100
-        c_seed = 12345
         c_num_tiles = 8
         c_param = torch.tensor([1] + [0 for i in range(63)])
 
@@ -523,7 +517,7 @@ if __name__ == "__main__":
         start = time.time()
 
         nodes = get_param_nodes(
-            c_num_nodes, c_num_samples, c_seed, c_num_tiles, c_param
+            c_num_nodes, c_num_samples, c_num_tiles, c_param
         )
 
         end = time.time()

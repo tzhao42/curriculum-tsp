@@ -16,7 +16,7 @@ module load openmind/singularity
 hostname
 nvidia-smi
 singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.15-0.85-0.00-20201114T193737 --run-name full-model-eval --proportions 0.15 0.85 0.00 &
-singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.00-1.00-0.00-20201114T193737 --run-name full-model-eval --proportions 0.00 1.00 0.00
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.00-1.00-0.00-20201114T193737 --run-name full-model-eval --proportions 0.00 1.00 0.00 &
 singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --mode test --load tsp-20-0.85-0.00-0.15-20201114T193737 --run-name full-model-eval --proportions 0.85 0.00 0.15 &
 
 sleep 24h

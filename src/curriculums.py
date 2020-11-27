@@ -21,13 +21,13 @@ from tasks.tsp import TSPCurriculum
 
 
 def make_curriculum(
-    epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+    epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
 ):
     """Makes a curriculum with the specifications specified in steps."""
     # Checking that the curriculum specified matches number of epochs
     assert epochs == sum([step[1] for step in steps])
 
-    curriculum = TSPCurriculum(num_nodes, train_size, val_size, seed, debug)
+    curriculum = TSPCurriculum(num_nodes, train_size, val_size, regen, debug)
 
     for step in steps:
         param_fn, num_epochs = step[0], step[1]
@@ -64,17 +64,17 @@ def get_indexed_curriculum(i):
     ][i]
 
 
-def get_curriculum_zero(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_zero(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create the uniform curriculum."""
     steps = [(get_uniform_param, 20)]
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_one(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_one(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment one.
 
     Curriculum consists of:
@@ -90,11 +90,11 @@ def get_curriculum_one(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_two(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_two(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment two.
 
     Curriculum consists of:
@@ -112,11 +112,13 @@ def get_curriculum_two(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_three(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_three(
+    epochs, num_nodes, train_size, val_size, regen, debug
+):
     """Create curriculum for experiment three."""
     steps = [
         (get_tiny_pair_param, 4),
@@ -127,11 +129,11 @@ def get_curriculum_three(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_four(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_four(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment four."""
     steps = [
         (get_horiz_param, 2),
@@ -145,11 +147,11 @@ def get_curriculum_four(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_five(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_five(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment five."""
     steps = [
         (get_down_line_param, 4),
@@ -160,11 +162,11 @@ def get_curriculum_five(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_six(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_six(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment six."""
     steps = [
         (get_circle_param, 10),
@@ -173,11 +175,13 @@ def get_curriculum_six(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_seven(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_seven(
+    epochs, num_nodes, train_size, val_size, regen, debug
+):
     """Create curriculum for experiment seven."""
     steps = [
         (get_tiny_quad_param, 10),
@@ -186,11 +190,13 @@ def get_curriculum_seven(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_eight(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_eight(
+    epochs, num_nodes, train_size, val_size, regen, debug
+):
     """Create curriculum for experiment eight."""
     steps = [
         (get_border_param, 10),
@@ -199,11 +205,11 @@ def get_curriculum_eight(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_nine(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_nine(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment nine."""
     steps = [
         (get_down_line_param, 10),
@@ -212,11 +218,11 @@ def get_curriculum_nine(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
-def get_curriculum_ten(epochs, num_nodes, train_size, val_size, seed, debug):
+def get_curriculum_ten(epochs, num_nodes, train_size, val_size, regen, debug):
     """Create curriculum for experiment ten."""
     steps = [
         (get_medium_pair_param, 20),
@@ -224,12 +230,12 @@ def get_curriculum_ten(epochs, num_nodes, train_size, val_size, seed, debug):
     val_param = get_medium_pair_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_eleven(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment eleven."""
     steps = [
@@ -239,12 +245,12 @@ def get_curriculum_eleven(
     val_param = get_medium_pair_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_twelve(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment twelve."""
     steps = [
@@ -253,12 +259,12 @@ def get_curriculum_twelve(
     val_param = get_tiny_quad_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_thirteen(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment thirteen."""
     steps = [
@@ -268,12 +274,12 @@ def get_curriculum_thirteen(
     val_param = get_tiny_quad_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_fourteen(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment fourteen."""
     steps = [
@@ -282,12 +288,12 @@ def get_curriculum_fourteen(
     val_param = get_x_shape_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_fifteen(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment fifteen."""
     steps = [
@@ -298,12 +304,12 @@ def get_curriculum_fifteen(
     val_param = get_x_shape_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_sixteen(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment sixteen."""
     steps = [
@@ -312,12 +318,12 @@ def get_curriculum_sixteen(
     val_param = get_border_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )
 
 
 def get_curriculum_seventeen(
-    epochs, num_nodes, train_size, val_size, seed, debug
+    epochs, num_nodes, train_size, val_size, regen, debug
 ):
     """Create curriculum for experiment seventeen."""
     steps = [
@@ -327,5 +333,5 @@ def get_curriculum_seventeen(
     val_param = get_border_param(NUM_TILES)
 
     return make_curriculum(
-        epochs, num_nodes, train_size, val_size, seed, steps, val_param, debug
+        epochs, num_nodes, train_size, val_size, steps, val_param, regen, debug
     )

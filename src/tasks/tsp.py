@@ -51,26 +51,30 @@ class _TSPStage:
 class TSPCurriculum:
     """Curriculum for training on tsp task."""
 
-    def __init__(self, num_nodes, train_size, val_size, seed, debug=False):
+    def __init__(
+        self, num_nodes, train_size, val_size, regen=False, debug=False
+    ):
         """Create TSP curriculum.
 
         Args:
             num_nodes (int): number of nodes per problem instance
             train_size (int): number of training points
             val_size (int): number of validation points
-            seed (int): random seed
+            regen (bool): whether to regenerate each dataset every epoch
             debug (bool): whether to run in debug (visualization) mode
         """
         self._num_nodes = num_nodes
         self._train_size = train_size
         self._val_size = val_size
-        self._seed = seed
+        self._regen = regen
         self._debug = debug
 
-        # training (initialization values must be reset)
-        self._stages = list()
+        # need to clean this up
 
-        self._curr_stage_index = None
+        # training (initialization values must be reset)
+        self._all_stages = list()
+        self._stages = None  # a generator
+
         self._curr_stage = None
         self._curr_dataset = None
 
@@ -81,6 +85,18 @@ class TSPCurriculum:
 
         # validation
         self._val_dataset = None
+
+    def _generate_curr_dataset(self):
+        """Generate current training dataset.
+
+        Call this helper method to generate a dataset with the current stage.
+        """
+        self._curr_dataset = TSPDataset(
+            num_nodes=self._num_nodes,
+            num_samples=self._train_size,
+            num_tiles=self._curr_stage.num_tiles,
+            param=self._curr_stage.param,
+        )
 
     def increment_epoch(self):
         """Increment the current epoch of the curriculum.
@@ -97,25 +113,22 @@ class TSPCurriculum:
             # can't increment anymore
             self._finished = True
 
-        new_stage_epoch = self._curr_stage.start + self._curr_stage.length
-        if self._curr_epoch == new_stage_epoch and not self._finished:
+        if (
+            self._curr_epoch
+            == self._curr_stage.start + self._curr_stage.length
+            and not self._finished
+        ):
             # load new stage and new dataset
-            self._curr_stage_index += 1
-            self._curr_stage = self._stages[self._curr_stage_index]
-        
-        if not self._finished:
-            # load dataset for new epoch
-            self._curr_dataset = TSPDataset(
-                num_nodes=self._num_nodes,
-                num_samples=self._train_size,
-                seed=self._seed * (self._curr_len + 1) + self._curr_epoch,
-                num_tiles=self._curr_stage.num_tiles,
-                param=self._curr_stage.param,
-            )
+            self._curr_stage = next(self._stages)
+            if not self._regen:
+                self._generate_curr_dataset()
 
     def get_dataset(self):
         """Get the training dataset of the current epoch."""
         assert not self._finished
+        if self._regen:
+            self._generate_curr_dataset()
+
         if self._debug:
             self.visualize_dataset(self._curr_dataset)
         return self._curr_dataset
@@ -136,7 +149,7 @@ class TSPCurriculum:
         """
         assert not self._finished
         curr_stage = _TSPStage(num_tiles, param, self._curr_len, num_epochs)
-        self._stages.append(curr_stage)
+        self._all_stages.append(curr_stage)
         self._curr_len += num_epochs
 
     def add_val(self, num_tiles, param):
@@ -146,11 +159,12 @@ class TSPCurriculum:
             num_tiles (int): number of tiles
             param (torch.Tensor): parameter for distribution of nodes
         """
+        assert not self._finished
+        assert self._val_dataset is None
+
         self._val_dataset = TSPDataset(
             num_nodes=self._num_nodes,
             num_samples=self._val_size,
-            seed = self._seed * (self._curr_len + 1) + self._curr_len,
-            # seed=self._seed + 1,
             num_tiles=num_tiles,
             param=param,
         )
@@ -161,15 +175,9 @@ class TSPCurriculum:
         assert self._val_dataset
 
         self._curr_epoch = 0
-        self._curr_stage_index = 0
-        self._curr_stage = self._stages[self._curr_stage_index]
-        self._curr_dataset = TSPDataset(
-            num_nodes=self._num_nodes,
-            num_samples=self._train_size,
-            seed=self._seed * (self._curr_len + 1) + self._curr_epoch,
-            num_tiles=self._curr_stage.num_tiles,
-            param=self._curr_stage.param,
-        )
+        self._stages = (stage for stage in self._all_stages)
+        self._curr_stage = next(self._stages)
+        self._generate_curr_dataset()
 
     def visualize_dataset(self, tspdataset, val=False):
         """Print a visualization of current dataset."""
@@ -196,7 +204,6 @@ class TSPDataset(Dataset):
         self,
         num_nodes=50,
         num_samples=1e6,
-        seed=None,
         num_tiles=None,
         param=None,
     ):
@@ -205,17 +212,12 @@ class TSPDataset(Dataset):
         Args:
             num_nodes (int): number of nodes per problem instance
             num_samples (int): number of problem instances in dataset
-            seed (int): random seed
             param (torch.Tensor): parameter for distribution of nodes
         """
         super(TSPDataset, self).__init__()
 
-        if seed is None:
-            seed = np.random.randint(123456789)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
         self.dataset = get_param_nodes(
-            num_nodes, num_samples, seed, num_tiles, param
+            num_nodes, num_samples, num_tiles, param
         )
         self.dynamic = torch.zeros(num_samples, 1, num_nodes)
         self.num_nodes = num_nodes

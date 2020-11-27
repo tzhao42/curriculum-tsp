@@ -65,6 +65,7 @@ def parse_arguments():
     parser.add_argument("--val-size", default=1000, type=int)
     parser.add_argument("--num-nodes", default=20, type=int)
     parser.add_argument("--curriculum", default=0, type=int)
+    parser.add_argument("--regen", default=False, action="store_true")
 
     # model params
     parser.add_argument("--hidden-size", default=128, type=int)
@@ -79,11 +80,15 @@ def parse_arguments():
     parser.add_argument("--epochs", default=20, type=int)
 
     # debug flag: short circuits training cycle
-    parser.add_argument(
-        "--debug", dest="debug", default=False, action="store_true"
-    )
+    parser.add_argument("--debug", default=False, action="store_true")
 
     return parser.parse_args()
+
+
+def set_seed(seed):
+    """Set the seed of numpy and torch for reproducibility."""
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 
 def check_args_valid(args):
@@ -462,13 +467,16 @@ def train_curriculum(
 
 def main_tsp(args, run_io):
     """Main method for training/testing model for tsp task."""
+    # set seed for tsp
+    set_seed(args.seed)
+
     # creating curriculum specified by args.curriculum
     curriculum = get_indexed_curriculum(args.curriculum)(
         args.epochs,
         args.num_nodes,
         args.train_size,
         args.val_size,
-        args.seed,
+        regen=args.regen,
         debug=DEBUG,
     )
 
