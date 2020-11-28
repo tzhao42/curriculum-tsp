@@ -17,7 +17,7 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
         num_samples (int): number of datapoints
         num_tiles (int): number of tiles per side (for a total number of
             num_tiles^2 tiles in the parameterization)
-        distrib (torch.Tensor): parameter describing distribution of data
+        param (torch.Tensor): parameter describing distribution of data
 
     Returns:
         torch tensor of shape (num_samples, 2, num_nodes) with distribution of
@@ -63,6 +63,11 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
             tiles[i, 1, j] = y_pos
 
     return tiles + offsets
+
+
+
+
+
 
 
 # param generating functions
@@ -496,118 +501,233 @@ def _visualize_param(num_tiles, param):
     plt.ylim(0, 1)
     plt.show()
 
+# profiling
+
+def _get_param_nodes_old(num_nodes, num_samples, num_tiles, param):
+    """Old function, for profiling purposes."""
+    # checking some preconditions
+    assert isinstance(num_nodes, int)
+    assert num_nodes > 0
+    assert isinstance(num_samples, int)
+    assert num_samples > 0
+    assert isinstance(num_tiles, int)
+    assert num_tiles > 0
+    _validate_param(num_tiles, param)
+
+    # some utility lists
+    nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
+    nonzero_vals = [param[i].item() for i in nonzero_indices]
+
+    # offests (where in the tile each node is located)
+    offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
+
+    # generating random tile seeds (determines which tiles they land in)
+    # can't think of a fast way to do this so we'll just iterate to get tiles
+    tile_seeds = torch.rand((num_samples, num_nodes))
+    tiles = torch.zeros((num_samples, 2, num_nodes))
+    for i in range(num_samples):
+        for j in range(num_nodes):
+            tile_seed = tile_seeds[i, j]
+
+            # generate a point
+            tiles[i, 0, j], tiles[i, 1, j] = _get_tile(
+                tile_seed, num_tiles, nonzero_indices, nonzero_vals
+            )
+
+    return tiles + offsets
+
+
+
+def _get_param_nodes_dev(num_nodes, num_samples, num_tiles, param, num_workers=4):
+    """Development function, for profiling purposes.
+    
+    Attempt at parallizing dataset generation.
+    """
+    # checking some preconditions
+    assert isinstance(num_nodes, int)
+    assert num_nodes > 0
+    assert isinstance(num_samples, int)
+    assert num_samples > 0
+    assert isinstance(num_tiles, int)
+    assert num_tiles > 0
+    _validate_param(num_tiles, param)
+
+    # some utility lists
+    nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
+    nonzero_vals = [param[i].item() for i in nonzero_indices]
+
+    balanced = _balanced_probabilities(nonzero_indices, nonzero_vals)
+
+    # offests (where in the tile each node is located)
+    offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
+
+    # generating random tile seeds (determines which tiles they land in)
+    # can't think of a fast way to do this so we'll just iterate to get tiles
+    # tile_seeds = torch.rand((num_samples, num_nodes))
+    tiles = torch.zeros((num_samples, 2, num_nodes))
+    ind_seeds = torch.randint(0, len(balanced), (num_samples, num_nodes))
+    val_seeds = torch.rand((num_samples, num_nodes))
+
+    for i in range(num_samples):
+        for j in range(num_nodes):
+            tile_index = -1
+            if val_seeds[i, j] < balanced[ind_seeds[i, j]][2]:
+                tile_index = balanced[ind_seeds[i, j]][0]
+            else:
+                tile_index = balanced[ind_seeds[i, j]][1]
+            x_pos = (tile_index % num_tiles) * (1 / num_tiles)
+            y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (
+                1 / num_tiles
+            )
+            tiles[i, 0, j] = x_pos
+            tiles[i, 1, j] = y_pos
+
+    return tiles + offsets
+
 
 if __name__ == "__main__":
-    # debug flags
-    debugging_get_param_nodes = False
-    debugging_get_uniform_param = False
-    debugging_get_up_line_param = False
-    debugging_get_down_line_param = False
-    debugging_get_x_shape_param = False
-    debugging_get_horiz_param = False
-    debugging_get_vert_param = False
-    debugging_get_line_param = False
-    debugging_get_plus_param = False
-    debugging_get_circle_param = False
-    debugging_get_border_param = False
-    debugging_get_medium_pair_param = False
-    debugging_get_tiny_pair_param = False
-    debugging_get_tiny_quad_param = False
-    debugging_get_crossing_lines_param = False
+    profiling = True
+    debugging = False
 
-    if debugging_get_uniform_param:
-        c_num_tiles = 8
-        c_param = get_uniform_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_up_line_param:
-        c_num_tiles = 8
-        c_param = get_up_line_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_down_line_param:
-        c_num_tiles = 8
-        c_param = get_down_line_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_x_shape_param:
-        c_num_tiles = 8
-        c_param = get_x_shape_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_horiz_param:
-        c_num_tiles = 8
-        c_param = get_horiz_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_vert_param:
-        c_num_tiles = 8
-        c_param = get_vert_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_plus_param:
-        c_num_tiles = 8
-        c_param = get_plus_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_circle_param:
-        c_num_tiles = 8
-        c_param = get_circle_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_border_param:
-        c_num_tiles = 8
-        c_param = get_border_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_medium_pair_param:
-        c_num_tiles = 8
-        c_param = get_medium_pair_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_tiny_pair_param:
-        c_num_tiles = 8
-        c_param = get_tiny_pair_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_tiny_quad_param:
-        c_num_tiles = 8
-        c_param = get_tiny_quad_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_uniform_param:
-        c_num_tiles = 8
-        c_param = get_uniform_param(c_num_tiles)
-        _validate_param(c_num_tiles, c_param)
-        _visualize_param(c_num_tiles, c_param)
-
-    if debugging_get_param_nodes:
-        c_num_nodes = 20
+    if profiling:
+        # profiling
+        import time
+        c_num_nodes = 100
         c_num_samples = 100
         c_num_tiles = 8
-        c_param = torch.tensor([1] + [0 for i in range(63)])
+        c_param = get_uniform_param(c_num_tiles)
 
-        import time
-
+        print("Running old version")
         start = time.time()
-
-        nodes = get_param_nodes(
-            c_num_nodes, c_num_samples, c_num_tiles, c_param
-        )
-
+        _get_param_nodes_old(c_num_nodes, c_num_samples, c_num_tiles, c_param)
         end = time.time()
-        print(nodes)
-        print()
-        print(end - start)
+        print(f"Elapsed time: {end - start}")
+
+        print("Running current version")
+        start = time.time()
+        get_param_nodes(c_num_nodes, c_num_samples, c_num_tiles, c_param)
+        end = time.time()
+        print(f"Elapsed time: {end - start}")
+
+        print("Running dev version")
+        start = time.time()
+        _get_param_nodes_dev(c_num_nodes, c_num_samples, c_num_tiles, c_param)
+        end = time.time()
+        print(f"Elapsed time: {end - start}")
+
+
+    
+    if debugging:
+        # debug flags
+        debugging_get_param_nodes = False
+        debugging_get_uniform_param = False
+        debugging_get_up_line_param = False
+        debugging_get_down_line_param = False
+        debugging_get_x_shape_param = False
+        debugging_get_horiz_param = False
+        debugging_get_vert_param = False
+        debugging_get_line_param = False
+        debugging_get_plus_param = False
+        debugging_get_circle_param = False
+        debugging_get_border_param = False
+        debugging_get_medium_pair_param = False
+        debugging_get_tiny_pair_param = False
+        debugging_get_tiny_quad_param = False
+        debugging_get_crossing_lines_param = False
+
+        if debugging_get_uniform_param:
+            c_num_tiles = 8
+            c_param = get_uniform_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_up_line_param:
+            c_num_tiles = 8
+            c_param = get_up_line_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_down_line_param:
+            c_num_tiles = 8
+            c_param = get_down_line_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_x_shape_param:
+            c_num_tiles = 8
+            c_param = get_x_shape_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_horiz_param:
+            c_num_tiles = 8
+            c_param = get_horiz_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_vert_param:
+            c_num_tiles = 8
+            c_param = get_vert_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_plus_param:
+            c_num_tiles = 8
+            c_param = get_plus_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_circle_param:
+            c_num_tiles = 8
+            c_param = get_circle_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_border_param:
+            c_num_tiles = 8
+            c_param = get_border_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_medium_pair_param:
+            c_num_tiles = 8
+            c_param = get_medium_pair_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_tiny_pair_param:
+            c_num_tiles = 8
+            c_param = get_tiny_pair_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_tiny_quad_param:
+            c_num_tiles = 8
+            c_param = get_tiny_quad_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_uniform_param:
+            c_num_tiles = 8
+            c_param = get_uniform_param(c_num_tiles)
+            _validate_param(c_num_tiles, c_param)
+            _visualize_param(c_num_tiles, c_param)
+
+        if debugging_get_param_nodes:
+            c_num_nodes = 20
+            c_num_samples = 100
+            c_num_tiles = 8
+            c_param = torch.tensor([1] + [0 for i in range(63)])
+
+            import time
+
+            start = time.time()
+
+            nodes = get_param_nodes(
+                c_num_nodes, c_num_samples, c_num_tiles, c_param
+            )
+
+            end = time.time()
+            print(nodes)
+            print()
+            print(end - start)
