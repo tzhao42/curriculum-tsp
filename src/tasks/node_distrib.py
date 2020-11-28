@@ -37,7 +37,11 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     nonzero_vals = [param[i].item() for i in nonzero_indices]
 
     balanced = _balanced_probabilities(nonzero_indices, nonzero_vals)
-
+    x_pos = list()
+    y_pos = list()
+    for i in range(0, len(param)):
+        x_pos.append((i % num_tiles) * (1 / num_tiles))
+        y_pos.append(1 - (math.floor(i / num_tiles) + 1) * (1 / num_tiles))
     # offests (where in the tile each node is located)
     offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
 
@@ -47,7 +51,7 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
     tiles = torch.zeros((num_samples, 2, num_nodes))
     ind_seeds = torch.randint(0, len(balanced), (num_samples, num_nodes))
     val_seeds = torch.rand((num_samples, num_nodes))
-
+    
     for i in range(num_samples):
         for j in range(num_nodes):
             tile_index = -1
@@ -55,12 +59,8 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param):
                 tile_index = balanced[ind_seeds[i, j]][0]
             else:
                 tile_index = balanced[ind_seeds[i, j]][1]
-            x_pos = (tile_index % num_tiles) * (1 / num_tiles)
-            y_pos = 1 - (math.floor(tile_index / num_tiles) + 1) * (
-                1 / num_tiles
-            )
-            tiles[i, 0, j] = x_pos
-            tiles[i, 1, j] = y_pos
+            tiles[i, 0, j] = x_pos[tile_index]
+            tiles[i, 1, j] = y_pos[tile_index]
 
     return tiles + offsets
 
