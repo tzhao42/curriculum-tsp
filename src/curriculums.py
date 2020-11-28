@@ -1,7 +1,7 @@
 """Various curriculum specifications."""
 
 import torch
-from constants import NUM_TILES
+from constants import NUM_CPUS, NUM_TILES
 from tasks import node_distrib, tsp
 from tasks.node_distrib import (
     get_border_param,
@@ -27,7 +27,10 @@ def make_curriculum(
     # Checking that the curriculum specified matches number of epochs
     assert epochs == sum([step[1] for step in steps])
 
-    curriculum = TSPCurriculum(num_nodes, train_size, val_size, regen, debug)
+    print(f"Using {NUM_CPUS} cpus")
+    curriculum = TSPCurriculum(
+        num_nodes, train_size, val_size, NUM_CPUS, regen, debug
+    )
 
     curriculum.add_val(NUM_TILES, val_param)
 

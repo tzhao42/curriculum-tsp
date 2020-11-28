@@ -23,6 +23,7 @@ from constants import (
     DEBUG,
     DEVICE,
     LOG_DIR,
+    NUM_CPUS,
     NUM_TILES,
     ORTOOLS_TSP_TIMEOUT,
     STATIC_SIZE,
@@ -109,10 +110,15 @@ def check_args_valid(args):
         assert args.num_nodes == int(load_nodes)
     assert args.task in {"tsp", "vrp"}
     assert isinstance(args.train_size, int)
+    assert args.train_size > 0
     assert isinstance(args.val_size, int)
+    assert args.val_size > 0
     assert isinstance(args.num_nodes, int)
+    assert args.num_nodes > 0
     assert isinstance(args.curriculum, int)
     assert args.curriculum >= 0
+    assert isinstance(args.regen, bool)
+    assert isinstance(args.gortools, bool)
     assert isinstance(args.hidden_size, int)
     assert isinstance(args.dropout, float)
     assert isinstance(args.num_layers, int)
@@ -199,7 +205,6 @@ class RunIO:
         # initializing log file
         self.log(f"\nRun {run_name} {curr_time_str}\n")
         self.log(f"Current device: {DEVICE}\n")
-        # self.log(f"Current data distribution: {data_distrib}\n")
 
     def log(self, message):
         """Writes a line to the log file."""
@@ -217,7 +222,13 @@ class RunIO:
 
 
 def test_tsp(
-    data_loader, actor, reward_fn, gortools, render_fn=None, num_plot=5, run_io=None
+    data_loader,
+    actor,
+    reward_fn,
+    gortools,
+    render_fn=None,
+    num_plot=5,
+    run_io=None,
 ):
     """Compare performance of model and google OR tools."""
 
@@ -240,13 +251,17 @@ def test_tsp(
         model_tour_lengths = reward_fn(static, tour_indices)
         if gortools:
             # compute optimality gap
-            optimal_tour_lengths = get_batched_or_tsp(static, ORTOOLS_TSP_TIMEOUT)
-            curr_opt_gaps = model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
+            optimal_tour_lengths = get_batched_or_tsp(
+                static, ORTOOLS_TSP_TIMEOUT
+            )
+            curr_opt_gaps = (
+                model_tour_lengths.cpu() / optimal_tour_lengths.cpu()
+            )
 
         # increment cumulative values
         cum_tour_length += model_tour_lengths.cpu().sum().item()
         mean_tour_length = model_tour_lengths.cpu().mean().item()
-        
+
         if gortools:
             cum_opt_gap += curr_opt_gaps.sum().item()
 
@@ -470,6 +485,10 @@ def main_tsp(args, run_io):
     set_seed(args.seed)
 
     # creating curriculum specified by args.curriculum
+
+    # import time
+    # start = time.time()
+
     curriculum = get_indexed_curriculum(args.curriculum)(
         args.epochs,
         args.num_nodes,
@@ -478,6 +497,12 @@ def main_tsp(args, run_io):
         regen=args.regen,
         debug=DEBUG,
     )
+
+
+    # end = time.time()
+    # print(f"Dataset generation took {end - start}s")
+    # import sys
+    # sys.exit(0)
 
     val_loader = DataLoader(
         curriculum.get_val_dataset(),

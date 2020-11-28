@@ -2,6 +2,7 @@
 
 import os
 import pathlib
+import multiprocessing
 
 import torch
 
@@ -35,3 +36,6 @@ ORTOOLS_TSP_TIMEOUT = 10
 
 # Debug flag
 DEBUG = False
+
+# CPU specification
+NUM_CPUS = multiprocessing.cpu_count()

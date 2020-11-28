@@ -52,7 +52,13 @@ class TSPCurriculum:
     """Curriculum for training on tsp task."""
 
     def __init__(
-        self, num_nodes, train_size, val_size, regen=False, debug=False
+        self,
+        num_nodes,
+        train_size,
+        val_size,
+        num_processes,
+        regen=False,
+        debug=False,
     ):
         """Create TSP curriculum.
 
@@ -60,12 +66,14 @@ class TSPCurriculum:
             num_nodes (int): number of nodes per problem instance
             train_size (int): number of training points
             val_size (int): number of validation points
+            num_processes (int): number of processes used to generate data
             regen (bool): whether to regenerate each dataset every epoch
             debug (bool): whether to run in debug (visualization) mode
         """
         self._num_nodes = num_nodes
         self._train_size = train_size
         self._val_size = val_size
+        self._num_processes = num_processes
         self._regen = regen
         self._debug = debug
 
@@ -96,6 +104,7 @@ class TSPCurriculum:
             num_samples=self._train_size,
             num_tiles=self._curr_stage.num_tiles,
             param=self._curr_stage.param,
+            num_processes=self._num_processes,
         )
 
     def increment_epoch(self):
@@ -167,6 +176,7 @@ class TSPCurriculum:
             num_samples=self._val_size,
             num_tiles=num_tiles,
             param=param,
+            num_processes=1,
         )
 
     def start(self):
@@ -201,23 +211,21 @@ class TSPCurriculum:
 
 class TSPDataset(Dataset):
     def __init__(
-        self,
-        num_nodes=50,
-        num_samples=1e6,
-        num_tiles=None,
-        param=None,
+        self, num_nodes, num_samples, num_tiles, param, num_processes
     ):
         """Create TSP dataset.
 
         Args:
             num_nodes (int): number of nodes per problem instance
             num_samples (int): number of problem instances in dataset
+            num_tiles (int): number of tiles to split [0,1]x[0,1] into
             param (torch.Tensor): parameter for distribution of nodes
+            num_processes (int): number of processes to generate data with
         """
         super(TSPDataset, self).__init__()
 
         self.dataset = get_param_nodes(
-            num_nodes, num_samples, num_tiles, param
+            num_nodes, num_samples, num_tiles, param, num_processes
         )
         self.dynamic = torch.zeros(num_samples, 1, num_nodes)
         self.num_nodes = num_nodes
