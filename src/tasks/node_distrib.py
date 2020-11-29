@@ -4,6 +4,7 @@ import math
 import multiprocessing as mp
 import os
 import uuid
+import pathlib
 
 import numpy as np
 import torch
@@ -144,7 +145,10 @@ def _get_param_nodes_worker(
     queue,
 ):
     """Worker for generating param nodes."""
-    fname = f"tmp-arr-{write_id}-{unique_id}.npy"
+    # Hacky path working because constants are hard to import
+    base_dir = pathlib.Path(__file__).parent.parent.absolute().parents[0]
+    temp_dir = os.path.join(base_dir, "temp")
+    fname = os.path.join(temp_dir, f"tmp-arr-{write_id}-{unique_id}.npy")
 
     # generating tensor
     tiles = np.zeros((end_samples - start_samples, 2, num_nodes))
