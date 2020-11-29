@@ -38,4 +38,4 @@ ORTOOLS_TSP_TIMEOUT = 10
 DEBUG = False
 
 # CPU specification
-NUM_CPUS = multiprocessing.cpu_count()
+NUM_CPUS = min(multiprocessing.cpu_count(), 16)
