@@ -9,7 +9,7 @@
 
 # Setting up singularity variable
 SINGULARITY_CONTAINER="/om2/user/tzhao/singularity/ortools-pytorch-gpu.simg"
-STARTING_DIRECTORY="/om2/user/tzhao/6883/6883-vrp"
+STARTING_DIRECTORY="/om2/user/tzhao/6883/curriculum-tsp"
 
 cd ${STARTING_DIRECTORY}
 module load openmind/singularity
