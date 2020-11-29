@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -t 48:00:00
+#SBATCH -t 72:00:00
 #SBATCH -N 1
-#SBATCH -n 2
-#SBATCH --mem=12G
+#SBATCH -n 16
+#SBATCH --mem=16G
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=12GB
 #SBATCH -p normal
@@ -16,8 +16,8 @@ module load openmind/singularity
 hostname
 nvidia-smi
 
-singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --num-nodes 100 --mode all --run-name static-exp-16 --curriculum 16 &
+singularity exec --nv ${SINGULARITY_CONTAINER} python3 src/main.py --num-nodes 100 --mode all --run-name static-exp-7 --curriculum 7 &
 
 sleep 3h
 nvidia-smi
-sleep 48h
+sleep 72h

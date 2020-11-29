@@ -1,8 +1,8 @@
 """Constants for operation."""
 
+import multiprocessing
 import os
 import pathlib
-import multiprocessing
 
 import torch
 

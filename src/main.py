@@ -481,28 +481,17 @@ def train_curriculum(
 
 def main_tsp(args, run_io):
     """Main method for training/testing model for tsp task."""
-    # set seed for tsp
-    set_seed(args.seed)
 
     # creating curriculum specified by args.curriculum
-
-    # import time
-    # start = time.time()
-
     curriculum = get_indexed_curriculum(args.curriculum)(
         args.epochs,
         args.num_nodes,
         args.train_size,
         args.val_size,
+        args.seed,
         regen=args.regen,
         debug=DEBUG,
     )
-
-
-    # end = time.time()
-    # print(f"Dataset generation took {end - start}s")
-    # import sys
-    # sys.exit(0)
 
     val_loader = DataLoader(
         curriculum.get_val_dataset(),
@@ -510,6 +499,9 @@ def main_tsp(args, run_io):
         shuffle=False,
         num_workers=0,
     )
+
+    # set seed for model initialization
+    set_seed(args.seed)
 
     # creating models on cpu
     actor = DRL4TSP(
@@ -699,7 +691,8 @@ if __name__ == "__main__":
         args.train_size = 4
         args.val_size = 4
         args.batch_size = 2
-        args.epochs = 20
+        if args.curriculum != 18:
+            args.epochs = 20
 
         DEBUG = True
         ORTOOLS_TSP_TIMEOUT = 1

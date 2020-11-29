@@ -1,10 +1,12 @@
 """Parameterization for distributions of nodes on [0,1]x[0,1] and utils."""
 
-import os
 import math
+import multiprocessing as mp
+import os
+import uuid
+
 import numpy as np
 import torch
-import multiprocessing as mp
 
 
 def get_param_nodes(num_nodes, num_samples, num_tiles, param, num_processes):
@@ -15,6 +17,14 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param, num_processes):
         2) There is probably a vectorized way to make this data generation
         faster, but it looks tricky to actually do well, so we'll use
         multiprocessing instead.
+        3) mp.Queue gets full sometimes because of the underlying pipe getting
+        full, which causes us some problems. We get around this by writing
+        things to disk instead
+        4) Worker processes CANNOT USE TORCH. I don't know why this is, but
+        torch.zeros causes threads to freeze for some reason. This might be a
+        bug with torch or a bug with torch multiprocessing, which is why I'm
+        using numpy and vanilla python multiprocessing. Plus, numpy seems to
+        be faster than torch for this particular purpose.
     Args:
         num_nodes (int): number of nodes per datapoint
         num_samples (int): number of datapoints
@@ -27,8 +37,6 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param, num_processes):
         torch tensor of shape (num_samples, 2, num_nodes) with distribution of
         nodes according to param argument
     """
-    # print(f"Input: {num_nodes}, {num_samples}, {num_tiles}, {param}, {num_processes}")
-
     # checking some preconditions
     assert isinstance(num_nodes, int)
     assert num_nodes > 0
@@ -73,30 +81,50 @@ def get_param_nodes(num_nodes, num_samples, num_tiles, param, num_processes):
     )
     sample_ranges.append(curr_range)
 
-    # using torch's wrapped multiprocessing
-    # need to split it up pretty huge
-    with mp.Pool(processes=num_processes) as pool:
-        results = [
-            pool.apply_async(
-                _get_param_nodes_worker,
-                args=(
-                    num_nodes,
-                    num_samples,
-                    sample_ranges[i][0],
-                    sample_ranges[i][1],
-                    balanced,
-                    x_pos,
-                    y_pos,
-                    ind_seeds,
-                    val_seeds,
-                ),
-            )
-            for i in range(num_processes)
-        ]
-        batches = [p.get() for p in results]
+    # generating uuid
+    unique_id = uuid.uuid4().hex
 
-    tiles = torch.cat(batches, dim=0)
+    # using vanilla multiprocessing and numpy
+    # turns out we have problems when we don't write things to files
+    processes = []
+    q = mp.Queue()
+    for i in range(num_processes):
+        t = mp.Process(
+            target=_get_param_nodes_worker,
+            args=(
+                num_nodes,
+                num_samples,
+                sample_ranges[i][0],
+                sample_ranges[i][1],
+                balanced,
+                x_pos,
+                y_pos,
+                ind_seeds,
+                val_seeds,
+                i + 1,
+                unique_id,
+                q,
+            ),
+        )
+        t.start()
+        processes.append(t)
+
+    for t in processes:
+        t.join()
+
+    batch_names = []
+    for i in range(num_processes):
+        batch_names.append(q.get())
+
+    batches = [np.load(fname, allow_pickle=False) for fname in batch_names]
+    for fname in batch_names:
+        os.remove(fname)
+
+    tiles = np.concatenate(batches, axis=0)
+    tiles = torch.from_numpy(tiles)
     ret = tiles + offsets
+
+    ret = ret.to(torch.float32)
 
     return ret
 
@@ -111,10 +139,15 @@ def _get_param_nodes_worker(
     y_pos,
     ind_seeds,
     val_seeds,
+    write_id,
+    unique_id,
+    queue,
 ):
     """Worker for generating param nodes."""
-    tiles = torch.zeros((end_samples - start_samples, 2, num_nodes))
+    fname = f"tmp-arr-{write_id}-{unique_id}.npy"
 
+    # generating tensor
+    tiles = np.zeros((end_samples - start_samples, 2, num_nodes))
     for i in range(start_samples, end_samples):
         for j in range(num_nodes):
             tile_index = -1
@@ -125,7 +158,9 @@ def _get_param_nodes_worker(
             tiles[i - start_samples, 0, j] = x_pos[tile_index]
             tiles[i - start_samples, 1, j] = y_pos[tile_index]
 
-    return tiles
+    # saving tensor to disk
+    np.save(fname, tiles, allow_pickle=False)
+    queue.put(fname)
 
 
 # param generating functions
@@ -574,152 +609,6 @@ def _visualize_nodes(nodes):
     plt.show()
 
 
-
-# stupid pipes are too small for my poop
-
-
-def get_param_nodes_dev(num_nodes, num_samples, num_tiles, param, num_processes):
-    """Create collection of points distributed according to parameters.
-
-    Performance notes:
-        1) We can usually assume that num_tiles is somewhat small.
-        2) There is probably a vectorized way to make this data generation
-        faster, but it looks tricky to actually do well, so we'll use
-        multiprocessing instead.
-        3) mp.Queue gets full sometimes because of the underlying pipe getting full, which causes us some problems. We get around this by writing things to disk instead
-        4) Worker processes CANNOT USE TORCH. I don't know why this is, but torch causes threads to freeze for some reason. This might be a bug with torch or a bug with torch multiprocessing, which is why I'm using numpy and vanilla python multiprocessing. Plus, numpy seems to be faster than torch for this particular purpose.
-    Args:
-        num_nodes (int): number of nodes per datapoint
-        num_samples (int): number of datapoints
-        num_tiles (int): number of tiles per side (for a total number of
-            num_tiles^2 tiles in the parameterization)
-        param (torch.Tensor): parameter describing distribution of data
-        num_processes (int): number of processes this should spawn (should be
-            at least number of cpus)
-    Returns:
-        torch tensor of shape (num_samples, 2, num_nodes) with distribution of
-        nodes according to param argument
-    """
-    # checking some preconditions
-    assert isinstance(num_nodes, int)
-    assert num_nodes > 0
-    assert isinstance(num_samples, int)
-    assert num_samples > 0
-    assert isinstance(num_tiles, int)
-    assert num_tiles > 0
-    _validate_param(num_tiles, param)
-    assert isinstance(num_processes, int)
-    assert num_processes > 0
-
-    # some utility lists
-    # since param is fairly short, we can do this in raw python
-    nonzero_indices = [i for i in range(len(param)) if param[i] > 0]
-    nonzero_vals = [param[i].item() for i in nonzero_indices]
-
-    # precomputations for spencer's magic
-    balanced = _balanced_probabilities(nonzero_indices, nonzero_vals)
-    x_pos = list()
-    y_pos = list()
-    for i in range(0, len(param)):
-        x_pos.append((i % num_tiles) * (1 / num_tiles))
-        y_pos.append(1 - (math.floor(i / num_tiles) + 1) * (1 / num_tiles))
-
-    # generating random tile seeds (determines which tiles they land in)
-    # can't think of a fast way to do this so we'll just iterate to get tiles
-    # generating random tensors
-    offsets = torch.rand((num_samples, 2, num_nodes)) / num_tiles
-    ind_seeds = torch.randint(0, len(balanced), (num_samples, num_nodes))
-    val_seeds = torch.rand((num_samples, num_nodes))
-
-    # calculating start/end values for each batch
-    sample_ranges = []
-    range_size = math.floor(num_samples / num_processes)
-    for i in range(num_processes - 1):
-        curr_range = (i * range_size, (i + 1) * range_size)
-        sample_ranges.append(curr_range)
-    # getting any stragglers
-    curr_range = (
-        (num_processes - 1) * range_size,
-        max(num_processes * range_size, num_samples),
-    )
-    sample_ranges.append(curr_range)
-
-    # using vanilla multiprocessing and numpy
-    # turns out we have problems when we don't write things to files
-    processes = []
-    q = mp.Queue()
-    for i in range(num_processes):
-        t = mp.Process(target = _get_param_nodes_dev_worker, 
-                args=(
-                    num_nodes,
-                    num_samples,
-                    sample_ranges[i][0],
-                    sample_ranges[i][1],
-                    balanced,
-                    x_pos,
-                    y_pos,
-                    ind_seeds,
-                    val_seeds,
-                    i + 1,
-                    q
-                )
-        )
-        t.start()
-        processes.append(t)
-
-    for t in processes:
-        t.join()
-
-    batch_names = []
-    for i in range(num_processes):
-        batch_names.append(q.get())
-
-    batches = [np.load(fname, allow_pickle=False) for fname in batch_names]
-    for fname in batch_names:
-        os.remove(fname)
-
-    tiles = np.concatenate(batches, axis=0)
-    tiles = torch.from_numpy(tiles)
-    ret = tiles + offsets
-
-    return ret
-
-
-def _get_param_nodes_dev_worker(
-    num_nodes,
-    num_samples,
-    start_samples,
-    end_samples,
-    balanced,
-    x_pos,
-    y_pos,
-    ind_seeds,
-    val_seeds,
-    write_id,
-    queue
-):
-    """Worker for generating param nodes."""
-    fname = f"temp/temp-array-{write_id}.npy"
-    
-    # generating tensor
-    tiles = np.zeros((end_samples - start_samples, 2, num_nodes))
-    for i in range(start_samples, end_samples):
-        for j in range(num_nodes):
-            tile_index = -1
-            if val_seeds[i, j] < balanced[ind_seeds[i, j]][2]:
-                tile_index = balanced[ind_seeds[i, j]][0]
-            else:
-                tile_index = balanced[ind_seeds[i, j]][1]
-            tiles[i - start_samples, 0, j] = x_pos[tile_index]
-            tiles[i - start_samples, 1, j] = y_pos[tile_index]
-    
-    
-    # saving tensor to disk
-    np.save(fname, tiles, allow_pickle=False)
-    queue.put(fname)
-
-
-
 if __name__ == "__main__":
     profiling = True
     debugging = False
@@ -729,27 +618,15 @@ if __name__ == "__main__":
         import time
 
         c_num_nodes = 100
-        c_num_samples = 5000
+        c_num_samples = 1000
         c_num_tiles = 8
         c_param = get_tiny_pair_param(c_num_tiles)
         c_processes = 8
 
-        # print()
-        # print("Running multiprocess version")
-        # start = time.time()
-        # nodes = get_param_nodes(
-        #     c_num_nodes, c_num_samples, c_num_tiles, c_param, c_processes
-        # )
-        # end = time.time()
-        # print(f"Elapsed time: {end - start}")
-        # print(nodes.size())
-        # print()
-        # _visualize_nodes(nodes)
-
         print()
-        print("Running new multiprocess version")
+        print("Running multiprocess version")
         start = time.time()
-        nodes = get_param_nodes_dev(
+        nodes = get_param_nodes(
             c_num_nodes, c_num_samples, c_num_tiles, c_param, c_processes
         )
         end = time.time()
@@ -757,6 +634,9 @@ if __name__ == "__main__":
         print(nodes.size())
         print()
         # _visualize_nodes(nodes)
+        print(
+            f"Total memory footprint for {c_num_samples} samples (bytes): {nodes.element_size() * nodes.nelement()}"
+        )
 
     if debugging:
         # debug flags

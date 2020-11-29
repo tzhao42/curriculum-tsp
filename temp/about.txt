@@ -1,0 +1,2 @@
+This directory exists because a lot of temporary numpy files live here during runtime. Don't delete it or else things will break.
+

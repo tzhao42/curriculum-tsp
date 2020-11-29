@@ -21,6 +21,12 @@ from . import node_distrib
 from .node_distrib import get_param_nodes
 
 
+def _set_seed(seed):
+    """Set the seed of numpy and torch for reproducibility."""
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+
 class _TSPStage:
     """Stage of curriculum for training on tsp task.
 
@@ -57,6 +63,7 @@ class TSPCurriculum:
         train_size,
         val_size,
         num_processes,
+        seed,
         regen=False,
         debug=False,
     ):
@@ -74,6 +81,7 @@ class TSPCurriculum:
         self._train_size = train_size
         self._val_size = val_size
         self._num_processes = num_processes
+        self._initial_seed = seed
         self._regen = regen
         self._debug = debug
 
@@ -99,6 +107,9 @@ class TSPCurriculum:
 
         Call this helper method to generate a dataset with the current stage.
         """
+        # setting the seed
+        _set_seed(self._initial_seed + self._curr_epoch)
+
         self._curr_dataset = TSPDataset(
             num_nodes=self._num_nodes,
             num_samples=self._train_size,
@@ -170,6 +181,9 @@ class TSPCurriculum:
         """
         assert not self._finished
         assert self._val_dataset is None
+
+        # setting the seed
+        _set_seed(self._initial_seed - 5)
 
         self._val_dataset = TSPDataset(
             num_nodes=self._num_nodes,
