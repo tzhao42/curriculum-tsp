@@ -1,3 +1,5 @@
+#!/bin/bash
+
 sbatch test-20-batch-01.sh
 sbatch test-20-batch-02.sh
 sbatch test-20-batch-03.sh

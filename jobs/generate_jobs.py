@@ -288,8 +288,11 @@ def validate_num_nodes(num_nodes_l, val_set_l, load_l):
 
 if __name__ == "__main__":
 
-    # clearing all-run.sh
+    # resetting all-run.sh
     open("run-all.sh", 'w').close()
+    with open("run-all.sh", "a+") as f:
+        f.write("#!/bin/bash\n\n")
+
 
     # generating execution parameters
     mode_l = ["test" for i in range(40)]
