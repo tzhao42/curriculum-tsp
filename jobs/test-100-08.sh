@@ -4,7 +4,7 @@
 #SBATCH -n 16
 #SBATCH --mem=16GB
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=13GB
+#SBATCH --constraint=12GB
 #SBATCH -p normal
 
 # This script was generate automatically

@@ -288,6 +288,9 @@ def validate_num_nodes(num_nodes_l, val_set_l, load_l):
 
 if __name__ == "__main__":
 
+    # clearing all-run.sh
+    open("run-all.sh", 'w').close()
+
     # generating execution parameters
     mode_l = ["test" for i in range(40)]
 
@@ -418,7 +421,7 @@ if __name__ == "__main__":
     om_cpus_l = [16 for i in range(20)]
     om_mem_l = [16 for i in range(20)]
     om_gpus_l = [1 for i in range(20)]
-    om_gpu_size_l = [13 for i in range(20)]
+    om_gpu_size_l = [12 for i in range(20)]
     om_partition_l = ["normal" for i in range(20)]
     execution_dict = execution_dict_large
 
