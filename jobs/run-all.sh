@@ -1,0 +1,32 @@
+#!/bin/bash
+
+sbatch test-20-batch-01.sh
+sbatch test-20-batch-02.sh
+sbatch test-20-batch-03.sh
+sbatch test-20-batch-04.sh
+sbatch test-20-batch-05.sh
+sbatch test-20-batch-06.sh
+sbatch test-20-batch-07.sh
+sbatch test-20-batch-08.sh
+sbatch test-20-batch-09.sh
+sbatch test-20-batch-10.sh
+sbatch test-100-01.sh
+sbatch test-100-02.sh
+sbatch test-100-03.sh
+sbatch test-100-04.sh
+sbatch test-100-05.sh
+sbatch test-100-06.sh
+sbatch test-100-07.sh
+sbatch test-100-08.sh
+sbatch test-100-09.sh
+sbatch test-100-10.sh
+sbatch test-100-11.sh
+sbatch test-100-12.sh
+sbatch test-100-13.sh
+sbatch test-100-14.sh
+sbatch test-100-15.sh
+sbatch test-100-16.sh
+sbatch test-100-17.sh
+sbatch test-100-18.sh
+sbatch test-100-static.sh
+sbatch test-100-regen.sh

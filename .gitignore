@@ -4,6 +4,9 @@ __pycache__
 # Saved models
 logs/
 
+# Validation data
+data/
+
 # Out files
 nohup.out
 slurm*.out

@@ -64,6 +64,7 @@ def parse_arguments():
     parser.add_argument("--task", default="tsp")
     parser.add_argument("--train-size", default=1000000, type=int)
     parser.add_argument("--val-size", default=1000, type=int)
+    parser.add_argument("--val-set", default=None)
     parser.add_argument("--num-nodes", default=20, type=int)
     parser.add_argument("--curriculum", default=0, type=int)
     parser.add_argument("--regen", default=False, action="store_true")
@@ -492,6 +493,11 @@ def main_tsp(args, run_io):
         regen=args.regen,
         debug=DEBUG,
     )
+
+    if args.val_set:
+        # Load saved validation tensor from data into curriculum
+        val_dataset = TSPDataset(None, None, None, None, None, args.val_set)
+        curriculum.set_val_dataset(val_dataset)
 
     val_loader = DataLoader(
         curriculum.get_val_dataset(),

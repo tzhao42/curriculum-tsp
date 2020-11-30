@@ -10,6 +10,7 @@ __getitem__, which gets processed in trainer.py to be None
 """
 
 import os
+import pathlib
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -159,6 +160,10 @@ class TSPCurriculum:
             self.visualize_dataset(self._val_dataset, val=True)
         return self._val_dataset
 
+    def set_val_dataset(self, dataset):
+        """Get the validation dataset."""
+        self._val_dataset = dataset
+
     def add_stage(self, num_tiles, param, num_epochs):
         """Add a training stage to the curriculum.
 
@@ -225,7 +230,13 @@ class TSPCurriculum:
 
 class TSPDataset(Dataset):
     def __init__(
-        self, num_nodes, num_samples, num_tiles, param, num_processes
+        self,
+        num_nodes,
+        num_samples,
+        num_tiles,
+        param,
+        num_processes,
+        load=None,
     ):
         """Create TSP dataset.
 
@@ -235,15 +246,33 @@ class TSPDataset(Dataset):
             num_tiles (int): number of tiles to split [0,1]x[0,1] into
             param (torch.Tensor): parameter for distribution of nodes
             num_processes (int): number of processes to generate data with
+            load (str): name of path to load tensor from, if any. If set, all
+                other parameters are ignored (this is could cause errors if
+                not used carefully)
         """
         super(TSPDataset, self).__init__()
 
-        self.dataset = get_param_nodes(
-            num_nodes, num_samples, num_tiles, param, num_processes
-        )
-        self.dynamic = torch.zeros(num_samples, 1, num_nodes)
-        self.num_nodes = num_nodes
-        self.size = num_samples
+        if not load:
+            self.dataset = get_param_nodes(
+                num_nodes, num_samples, num_tiles, param, num_processes
+            )
+            self.dynamic = torch.zeros(num_samples, 1, num_nodes)
+            self.num_nodes = num_nodes
+            self.size = num_samples
+        else:
+            # loading data from data/load
+
+            # reproducing the directory code
+            base_dir = (
+                pathlib.Path(__file__).parent.parent.absolute().parents[0]
+            )
+            data_dir = os.path.join(base_dir, "data")
+            fname = os.path.join(data_dir, load)
+
+            self.dataset = torch.from_numpy(np.load(fname, allow_pickle=False))
+            self.num_nodes = self.dataset.size(2)
+            self.size = self.dataset.size(0)
+            self.dynamic = torch.zeros(self.size, 1, self.num_nodes)
 
     def __len__(self):
         return self.size
