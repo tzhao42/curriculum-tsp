@@ -150,7 +150,6 @@ class Job:
             f.write(f"sbatch {self._filename}\n")
 
 
-
 def generate_jobs(
     om_name_l,
     om_time_l,
@@ -193,9 +192,7 @@ def generate_jobs(
     executions_per_machine = len(mode_l) // len(om_name_l)
 
     all_mode_l = [
-        mode_l[
-            executions_per_machine * i : executions_per_machine * (i + 1)
-        ]
+        mode_l[executions_per_machine * i : executions_per_machine * (i + 1)]
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_run_name_l = [
@@ -211,9 +208,7 @@ def generate_jobs(
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_epochs_l = [
-        epochs_l[
-            executions_per_machine * i : executions_per_machine * (i + 1)
-        ]
+        epochs_l[executions_per_machine * i : executions_per_machine * (i + 1)]
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_curriculum_l = [
@@ -223,9 +218,7 @@ def generate_jobs(
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_regen_l = [
-        regen_l[
-            executions_per_machine * i : executions_per_machine * (i + 1)
-        ]
+        regen_l[executions_per_machine * i : executions_per_machine * (i + 1)]
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_val_set_l = [
@@ -235,9 +228,7 @@ def generate_jobs(
         for i in range(len(mode_l) // executions_per_machine)
     ]
     all_load_l = [
-        load_l[
-            executions_per_machine * i : executions_per_machine * (i + 1)
-        ]
+        load_l[executions_per_machine * i : executions_per_machine * (i + 1)]
         for i in range(len(mode_l) // executions_per_machine)
     ]
 
@@ -271,10 +262,11 @@ def validate_load_l(load_l):
     log_dir = os.path.join(base_dir, "logs")
 
     for load in load_l:
-        task, nodes = load.split("-")[0], load.split("-")[1]
-        parent_dir = f"{task}-{nodes}"
-        target_dir = os.path.join(log_dir, parent_dir, load)
-        assert os.path.isdir(target_dir)
+        if load:
+            task, nodes = load.split("-")[0], load.split("-")[1]
+            parent_dir = f"{task}-{nodes}"
+            target_dir = os.path.join(log_dir, parent_dir, load)
+            assert os.path.isdir(target_dir)
 
 
 def validate_num_nodes(num_nodes_l, val_set_l, load_l):
@@ -282,18 +274,18 @@ def validate_num_nodes(num_nodes_l, val_set_l, load_l):
     for i in range(len(num_nodes_l)):
         num_nodes = str(num_nodes_l[i])
         val_nodes = val_set_l[i].split("-")[1]
-        load_nodes = load_l[i].split("-")[1]
         assert num_nodes == val_nodes
-        assert num_nodes == load_nodes
+        if load_l[i]:
+            load_nodes = load_l[i].split("-")[1]
+            assert num_nodes == load_nodes
 
 
 if __name__ == "__main__":
 
     # resetting all-run.sh
-    open("run-all.sh", 'w').close()
+    open("run-all.sh", "w").close()
     with open("run-all.sh", "a+") as f:
         f.write("#!/bin/bash\n\n")
-
 
     # generating execution parameters
     mode_l = ["all" for i in range(40)]
@@ -324,7 +316,7 @@ if __name__ == "__main__":
     load_l = [None for i in range(40)]
 
     # validating
-    # validate_load_l(load_l)
+    validate_load_l(load_l)
     validate_num_nodes(num_nodes_l, val_set_l, load_l)
 
     # execution dict

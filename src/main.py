@@ -497,8 +497,6 @@ def main_tsp(args, run_io):
     if args.val_set:
         # Load saved validation tensor from data into curriculum
         val_dataset = TSPDataset(None, None, None, None, None, args.val_set)
-        if DEBUG:
-            print("Validation dataset of size: ", val_dataset.dataset.size())
         curriculum.set_val_dataset(val_dataset)
 
     val_loader = DataLoader(
@@ -720,8 +718,8 @@ if __name__ == "__main__":
         args.train_size = 4
         args.val_size = 4
         args.batch_size = 2
-        if args.curriculum != 18:
-            args.epochs = 20
+        # if args.curriculum != 18:
+        #     args.epochs = 20
 
         DEBUG = True
         ORTOOLS_TSP_TIMEOUT = 1
