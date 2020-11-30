@@ -79,7 +79,7 @@ def get_curriculum_zero(
     epochs, num_nodes, train_size, val_size, seed, regen, debug
 ):
     """Create the uniform curriculum."""
-    steps = [(get_uniform_param, 20)]
+    steps = [(get_uniform_param, epochs)]
     val_param = get_uniform_param(NUM_TILES)
 
     return make_curriculum(
@@ -108,7 +108,7 @@ def get_curriculum_one(
     steps = [
         (get_tiny_pair_param, 6),
         (get_medium_pair_param, 6),
-        (get_uniform_param, 8),
+        (get_uniform_param, epochs - 12),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -140,7 +140,7 @@ def get_curriculum_two(
         (get_tiny_pair_param, 4),
         (get_tiny_quad_param, 4),
         (get_border_param, 4),
-        (get_uniform_param, 8),
+        (get_uniform_param, epochs - 12),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -165,7 +165,7 @@ def get_curriculum_three(
         (get_tiny_pair_param, 4),
         (get_tiny_quad_param, 4),
         (get_circle_param, 4),
-        (get_uniform_param, 8),
+        (get_uniform_param, epochs - 12),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -193,7 +193,7 @@ def get_curriculum_four(
         (get_down_line_param, 2),
         (get_up_line_param, 2),
         (get_x_shape_param, 2),
-        (get_uniform_param, 8),
+        (get_uniform_param, epochs - 12),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -218,7 +218,7 @@ def get_curriculum_five(
         (get_down_line_param, 4),
         (get_up_line_param, 4),
         (get_circle_param, 4),
-        (get_uniform_param, 8),
+        (get_uniform_param, epochs - 12),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -241,7 +241,7 @@ def get_curriculum_six(
     """Create curriculum for experiment six."""
     steps = [
         (get_circle_param, 10),
-        (get_uniform_param, 10),
+        (get_uniform_param, epochs - 10),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -264,7 +264,7 @@ def get_curriculum_seven(
     """Create curriculum for experiment seven."""
     steps = [
         (get_tiny_quad_param, 10),
-        (get_uniform_param, 10),
+        (get_uniform_param, epochs - 10),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -287,7 +287,7 @@ def get_curriculum_eight(
     """Create curriculum for experiment eight."""
     steps = [
         (get_border_param, 10),
-        (get_uniform_param, 10),
+        (get_uniform_param, epochs - 10),
     ]
     val_param = get_uniform_param(NUM_TILES)
 
@@ -310,7 +310,7 @@ def get_curriculum_nine(
     """Create curriculum for experiment nine."""
     steps = [
         (get_down_line_param, 10),
-        (get_uniform_param, 10),
+        (get_uniform_param, epochs - 10),
     ]
     val_param = get_uniform_param(NUM_TILES)
 

@@ -497,6 +497,8 @@ def main_tsp(args, run_io):
     if args.val_set:
         # Load saved validation tensor from data into curriculum
         val_dataset = TSPDataset(None, None, None, None, None, args.val_set)
+        if DEBUG:
+            print("Validation dataset of size: ", val_dataset.dataset.size())
         curriculum.set_val_dataset(val_dataset)
 
     val_loader = DataLoader(
@@ -580,6 +582,27 @@ def main_tsp(args, run_io):
             args.max_grad_norm,
             run_io,
         )
+
+        # remake model
+        actor = DRL4TSP(
+            STATIC_SIZE,
+            TSP_DYNAMIC_SIZE,
+            args.hidden_size,
+            None,  # update dynamic is None
+            tsp.update_mask,
+            args.num_layers,
+            args.dropout,
+        )
+
+        # load the best saved model
+        saved_actor_state_dict = torch.load(
+            run_io.actor_path, map_location=torch.device("cpu")
+        )
+        actor.load_state_dict(saved_actor_state_dict)
+
+        # sending to proper device
+        actor.to(DEVICE)
+
         test_tsp(
             val_loader,
             actor,

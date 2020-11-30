@@ -19,6 +19,7 @@ class Job:
         self._partition = partition
 
         self._filename = f"{self._name}.sh"
+        open(self._filename, "w").close()
 
     def _generate_header(self):
         """Generate header."""
@@ -295,81 +296,35 @@ if __name__ == "__main__":
 
 
     # generating execution parameters
-    mode_l = ["test" for i in range(40)]
+    mode_l = ["all" for i in range(40)]
 
-    run_name_l = ["test-20-static-exp-{:0>2d}".format(i) for i in range(1, 19)]
-    run_name_l += ["test-20-static-uniform", "test-20-regen-uniform"]
-    run_name_l += [
-        "test-100-static-exp-{:0>2d}".format(i) for i in range(1, 19)
-    ]
-    run_name_l += ["test-100-static-uniform", "test-100-regen-uniform"]
+    run_name_l = ["static-exp-{:0>2d}-epochs-30".format(i) for i in range(10)]
+    run_name_l += ["regen-exp-{:0>2d}-epochs-30".format(i) for i in range(10)]
+    run_name_l += ["static-exp-{:0>2d}-epochs-30".format(i) for i in range(10)]
+    run_name_l += ["regen-exp-{:0>2d}-epochs-30".format(i) for i in range(10)]
 
     num_nodes_l = [20 for i in range(20)]
     num_nodes_l += [100 for i in range(20)]
 
-    epochs_l = [20 for i in range(1, 18)]
-    epochs_l += [30, 20, 20]
-    epochs_l += [20 for i in range(1, 18)]
-    epochs_l += [30, 20, 20]
+    epochs_l = [30 for i in range(40)]
 
-    curriculum_l = [i for i in range(1, 19)]
-    curriculum_l += [0, 0]
-    curriculum_l += [i for i in range(1, 19)]
-    curriculum_l += [0, 0]
+    curriculum_l = [i for i in range(10)]
+    curriculum_l += [i for i in range(10)]
+    curriculum_l += [i for i in range(10)]
+    curriculum_l += [i for i in range(10)]
 
-    regen_l = [False for i in range(1, 20)]
-    regen_l += [True]
-    regen_l += [False for i in range(1, 20)]
-    regen_l += [True]
+    regen_l = [False for i in range(10)]
+    regen_l += [True for i in range(10)]
+    regen_l += [False for i in range(10)]
+    regen_l += [True for i in range(10)]
 
     val_set_l = ["tsp-20-val-1000.npy" for i in range(20)]
     val_set_l += ["tsp-100-val-1000.npy" for i in range(20)]
 
-    load_l = [
-        "tsp-20-static-exp-1-20201129T003048",
-        "tsp-20-static-exp-2-20201129T003048",
-        "tsp-20-static-exp-3-20201129T003048",
-        "tsp-20-static-exp-4-20201129T003048",
-        "tsp-20-static-exp-5-20201129T003049",
-        "tsp-20-static-exp-6-20201129T003049",
-        "tsp-20-static-exp-7-20201129T003049",
-        "tsp-20-static-exp-8-20201129T003049",
-        "tsp-20-static-exp-9-20201129T003049",
-        "tsp-20-static-exp-10-20201129T003049",
-        "tsp-20-static-exp-11-20201129T003049",
-        "tsp-20-static-exp-12-20201129T003049",
-        "tsp-20-static-exp-13-20201129T003049",
-        "tsp-20-static-exp-14-20201129T003049",
-        "tsp-20-static-exp-15-20201129T003049",
-        "tsp-20-static-exp-16-20201129T003049",
-        "tsp-20-static-exp-17-20201129T003049",
-        "tsp-20-static-exp-18-20201129T003049",
-        "tsp-20-static-uniform-20201129T003049",
-        "tsp-20-regen-uniform-20201129T011151",
-        "tsp-100-static-exp-1-20201129T003052",
-        "tsp-100-static-exp-2-20201129T003051",
-        "tsp-100-static-exp-3-20201129T003052",
-        "tsp-100-static-exp-4-20201129T003051",
-        "tsp-100-static-exp-5-20201129T003052",
-        "tsp-100-static-exp-6-20201129T003051",
-        "tsp-100-static-exp-7-20201129T003051",
-        "tsp-100-static-exp-8-20201129T003051",
-        "tsp-100-static-exp-9-20201129T003052",
-        "tsp-100-static-exp-10-20201129T003051",
-        "tsp-100-static-exp-11-20201129T003052",
-        "tsp-100-static-exp-12-20201129T003051",
-        "tsp-100-static-exp-13-20201129T011656",
-        "tsp-100-static-exp-14-20201129T012837",
-        "tsp-100-static-exp-15-20201129T003052",
-        "tsp-100-static-exp-16-20201129T003051",
-        "tsp-100-static-exp-17-20201129T003051",
-        "tsp-100-static-exp-18-20201129T003051",
-        "tsp-100-static-uniform-20201129T003052",
-        "tsp-100-regen-uniform-20201129T003051",
-    ]
+    load_l = [None for i in range(40)]
 
     # validating
-    validate_load_l(load_l)
+    # validate_load_l(load_l)
     validate_num_nodes(num_nodes_l, val_set_l, load_l)
 
     # execution dict
@@ -395,10 +350,12 @@ if __name__ == "__main__":
     }
 
     # generating scripts
-    om_name_l = ["test-20-batch-{:0>2d}".format(i) for i in range(1, 11)]
-    om_time_l = [24 for i in range(10)]
+    om_name_l = ["e20-static-batch-{:0>2d}".format(i) for i in range(5)]
+    om_name_l += ["e20-regen-batch-{:0>2d}".format(i) for i in range(5)]
+    om_time_l = [72 for i in range(10)]
     om_num_nodes_l = [1 for i in range(10)]
-    om_cpus_l = [4 for i in range(10)]
+    om_cpus_l = [4 for i in range(5)]
+    om_cpus_l += [8 for i in range(5)]
     om_mem_l = [12 for i in range(10)]
     om_gpus_l = [1 for i in range(10)]
     om_gpu_size_l = [6 for i in range(10)]
@@ -417,9 +374,9 @@ if __name__ == "__main__":
         execution_dict,
     )
 
-    om_name_l = ["test-100-{:0>2d}".format(i) for i in range(1, 19)]
-    om_name_l += ["test-100-static", "test-100-regen"]
-    om_time_l = [24 for i in range(20)]
+    om_name_l = ["e100-static-exp-{:0>2d}".format(i) for i in range(10)]
+    om_name_l += ["e100-regen-exp-{:0>2d}".format(i) for i in range(10)]
+    om_time_l = [72 for i in range(20)]
     om_num_nodes_l = [1 for i in range(20)]
     om_cpus_l = [16 for i in range(20)]
     om_mem_l = [16 for i in range(20)]
