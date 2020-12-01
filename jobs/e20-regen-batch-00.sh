@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -t 72:00:00
 #SBATCH -N 1
-#SBATCH -n 8
+#SBATCH -n 4
 #SBATCH --mem=12GB
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=6GB
-#SBATCH -p normal
+#SBATCH -p cbmm
 
 # This script was generate automatically
 

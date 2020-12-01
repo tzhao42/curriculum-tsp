@@ -31,6 +31,7 @@ class Job:
         self._writeline(f"#SBATCH --gres=gpu:{self._gpus}")
         self._writeline(f"#SBATCH --constraint={self._gpu_size}GB")
         self._writeline(f"#SBATCH -p {self._partition}")
+        # self._writeline(f"#SBATCH --output=o-{self._name}.out")
         self._writeline("")
         self._writeline("# This script was generate automatically")
         self._writeline("")
@@ -346,12 +347,12 @@ if __name__ == "__main__":
     om_name_l += ["e20-regen-batch-{:0>2d}".format(i) for i in range(5)]
     om_time_l = [72 for i in range(10)]
     om_num_nodes_l = [1 for i in range(10)]
-    om_cpus_l = [4 for i in range(5)]
-    om_cpus_l += [8 for i in range(5)]
+    om_cpus_l = [4 for i in range(10)]
+    # om_cpus_l += [8 for i in range(5)]
     om_mem_l = [12 for i in range(10)]
     om_gpus_l = [1 for i in range(10)]
     om_gpu_size_l = [6 for i in range(10)]
-    om_partition_l = ["normal" for i in range(10)]
+    om_partition_l = ["cbmm" for i in range(10)]
     execution_dict = execution_dict_small
 
     generate_jobs(
@@ -374,7 +375,7 @@ if __name__ == "__main__":
     om_mem_l = [16 for i in range(20)]
     om_gpus_l = [1 for i in range(20)]
     om_gpu_size_l = [12 for i in range(20)]
-    om_partition_l = ["normal" for i in range(20)]
+    om_partition_l = ["cbmm" for i in range(20)]
     execution_dict = execution_dict_large
 
     generate_jobs(
