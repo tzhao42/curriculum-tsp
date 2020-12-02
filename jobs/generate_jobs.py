@@ -134,7 +134,7 @@ class Job:
         self._writeline("")
         self._writeline("sleep 2h")
         self._writeline("nvidia-smi")
-        self._writeline("sleep 72h")
+        self._writeline(f"sleep {self._time}h")
         self._writeline("")
         self._writeline("")
 
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     # generating scripts
     om_name_l = ["e20-static-batch-{:0>2d}".format(i) for i in range(5)]
     om_name_l += ["e20-regen-batch-{:0>2d}".format(i) for i in range(5)]
-    om_time_l = [72 for i in range(10)]
+    om_time_l = [167 for i in range(10)] # we want super long times to allow for things to finish executing
     om_num_nodes_l = [1 for i in range(10)]
     om_cpus_l = [4 for i in range(10)]
     # om_cpus_l += [8 for i in range(5)]
@@ -369,7 +369,7 @@ if __name__ == "__main__":
 
     om_name_l = ["e100-static-exp-{:0>2d}".format(i) for i in range(10)]
     om_name_l += ["e100-regen-exp-{:0>2d}".format(i) for i in range(10)]
-    om_time_l = [72 for i in range(20)]
+    om_time_l = [167 for i in range(10)] # we want super long times to allow for things to finish executing
     om_num_nodes_l = [1 for i in range(20)]
     om_cpus_l = [16 for i in range(20)]
     om_mem_l = [16 for i in range(20)]
