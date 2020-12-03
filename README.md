@@ -1,36 +1,22 @@
-# 6883-vrp
+# Curriculum TSP
 
-Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper.
+Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper (Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018)).
 
-I'll update this readme later with more info.
-
-Implementation of: Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018).
-
-Currently, Traveling Salesman Problems and Vehicle Routing Problems are supported. See the _tasks/_ folder for details.
+Currently, only the Traveling Salesman Problem is supported. See the _tasks/_ folder for details. The Vehicle Routing Problem (VRP) is the same as the mveres01 implementation, while we have implemented infrastructure wrapping for curriculum learining in TSP
 
 ## Requirements:
 
-Forked from a repo recommending:
-* Python 3.6
-* pytorch=0.4.1
-* matplotlib
-
-Currently running with:
-* Python 3.7.8
-* pytorch=1.6.0+cu101
-* matplotlib
+* Python 3.7.5
+* pytorch=1.7.0+cu101
+* matplotlib=3.3.1
+* ortools=8.0.8283
 
 # To Run
 
-Run by calling ```python trainer.py```
+Run by calling ```python main.py``` with the appropriate flags. Documentation for flags is contained in `main.py` file. Tasks and complexity can be changed through the "task" and "nodes" flag: ```python trainer.py --task=vrp --nodes=10```.
 
-Tasks and complexity can be changed through the "task" and "nodes" flag:
+From mveres01:
 
-```python trainer.py --task=vrp --nodes=10```
-
-To restore a checkpoint, you must specify the path to a folder that has "actor.pt" and "critic.pt" checkpoints. Sample weights can be found [here](https://drive.google.com/open?id=1wxccGStVglspW-qIpUeMPXAGHh2HsFpF)
-
-```python trainer.py --task=vrp --nodes=10 --checkpoint=vrp10```
 ## Differences from paper:
 
 * Uses a GRU instead of LSTM for the decoder network
@@ -58,8 +44,6 @@ __Right__: VRP with 20 cities + load 30
   <img src="./docs/vrp10.png" width="300"/>
   <img src="./docs/vrp20.png" width="300"/>
 </p>
-
-
 
 
 # TSP
