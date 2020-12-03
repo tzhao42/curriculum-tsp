@@ -1,6 +1,6 @@
 # Curriculum TSP
 
-Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper (Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018)), and to Openmind for compute resources.
+Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper (Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018)), and to [Openmind](https://openmind.mit.edu/) for compute resources.
 
 Currently, only the Traveling Salesman Problem is supported. See the _src/tasks/_ for details. The Vehicle Routing Problem (VRP) is the same as the mveres01 implementation, while we have implemented infrastructure wrapping for curriculum learining in TSP
 
