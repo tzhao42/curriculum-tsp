@@ -2,7 +2,7 @@
 
 Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper (Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018)).
 
-Currently, only the Traveling Salesman Problem is supported. See the _tasks/_ folder for details. The Vehicle Routing Problem (VRP) is the same as the mveres01 implementation, while we have implemented infrastructure wrapping for curriculum learining in TSP
+Currently, only the Traveling Salesman Problem is supported. See the _src/tasks/_ for details. The Vehicle Routing Problem (VRP) is the same as the mveres01 implementation, while we have implemented infrastructure wrapping for curriculum learining in TSP
 
 ## Requirements:
 
@@ -13,7 +13,7 @@ Currently, only the Traveling Salesman Problem is supported. See the _tasks/_ fo
 
 # To Run
 
-Run by calling ```python main.py``` with the appropriate flags. Documentation for flags is contained in `main.py` file. Tasks and complexity can be changed through the "task" and "nodes" flag: ```python trainer.py --task=vrp --nodes=10```.
+Run by calling ```python src/main.py``` with the appropriate flags. Documentation for flags is contained in `src/main.py` file. Tasks and complexity can be changed through the "task" and "nodes" flag: ```python src/main.py --task=vrp --nodes=10```.
 
 From mveres01:
 
