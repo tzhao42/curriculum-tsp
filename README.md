@@ -1,5 +1,9 @@
 # Curriculum TSP
 
+About this project: This was a research project for MIT's 6.883 (Meta Learning, Fall 2020). We aim to present a novel curriculum learning framework to improve performance of learning-based combinatorial optimization models. This is an ongoing project -- our preliminary results suggest that the approach we are taking allows for the creation of test-aware curricula.
+
+## Details:
+
 Credits to mveres01/pytorch-drl4vrp for the implementation of the Nazari paper (Nazari, Mohammadreza, et al. "Deep Reinforcement Learning for Solving the Vehicle Routing Problem." arXiv preprint arXiv:1802.04240 (2018)), and to [Openmind](https://openmind.mit.edu/) for compute resources.
 
 Currently, only the Traveling Salesman Problem is supported. See the _src/tasks/_ for details. The Vehicle Routing Problem (VRP) is the same as the mveres01 implementation, while we have implemented infrastructure wrapping for curriculum learining in TSP
@@ -15,7 +19,7 @@ Currently, only the Traveling Salesman Problem is supported. See the _src/tasks/
 
 Run by calling ```python src/main.py``` with the appropriate flags. Documentation for flags is contained in `src/main.py` file. Tasks and complexity can be changed through the "task" and "nodes" flag: ```python src/main.py --task=vrp --nodes=10```.
 
-From mveres01:
+Note: Everything below this line is documentation from mveres01's original repository.
 
 ## Differences from paper:
 
